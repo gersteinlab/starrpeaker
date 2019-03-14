@@ -17,5 +17,10 @@ setup(name='starrpeaker',
           'pysam',
           'pybedtools',
           'pyBigWig'
-      ]
+      ],
+      entry_points = {
+          'console_scripts': [
+              'starrpeaker = starrpeaker.starrpeaker:main'
+          ]
+          }
       )
