@@ -20,7 +20,7 @@ setup(name='starrpeaker',
       ],
       entry_points = {
           'console_scripts': [
-              'starrpeaker = starrpeaker.starrpeaker:main'
+              'starrpeaker = starrpeaker.starrpeaker.starrpeaker:main'
           ]
           }
       )
