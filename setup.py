@@ -6,7 +6,7 @@ setup(name='starrpeaker',
       keywords = "STARR-seq, peaks, bioinformatics",
       url='http://github.com/hoondy/starrpeaker',
       author='Donghoon Lee',
-      author_email='flyingcircus@example.com',
+      author_email='donghoon.lee@yale.edu',
       license='GPL',
       packages=['starrpeaker'],
       install_requires=[
@@ -17,6 +17,5 @@ setup(name='starrpeaker',
           'pysam',
           'pybedtools',
           'pyBigWig'
-      ],
-      zip_safe=False
+      ]
       )
