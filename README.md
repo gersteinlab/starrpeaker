@@ -1,4 +1,4 @@
-# starrpeaker
+# StarrPeaker
 Peak caller for STARR-seq data
 
 ## Dependencies
@@ -95,7 +95,7 @@ optional args
 starrpeaker --prefix <prefix for output files> --chromsize <hg38.chrom.sizes> --blacklist <blacklist_GRCh38.bed> --cov <covariate 1: gc content> <covariate 2: mappability> <covariate 3: conservation> --input <input.bam> --output <output.bam>
 ```
 
-## Output
+## Outputs
 
 * *prefix*.input.tsv: input count
 * *prefix*.output.tsv: output count
