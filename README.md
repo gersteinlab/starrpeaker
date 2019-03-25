@@ -97,9 +97,8 @@ starrpeaker --prefix <prefix for output files> --chromsize <hg38.chrom.sizes> --
 
 ## Outputs
 
-* *prefix*.input.tsv: input count
-* *prefix*.output.tsv: output count
-* *prefix*.cov.tsv: covariate matrix
-* *prefix*.bin.bed: bin
+* *prefix*.bin.bed: bin BED file
+* *prefix*.bam.bct: bin count in BST format (1st col: input, 2nd col: output, 3rd col: normalized input)
+* *prefix*.cov.tsv: covariate matrix in TSV format
 * *prefix*.peak.bed: peaks per bin
 * *prefix*.peak.merged.bed: merged peaks
