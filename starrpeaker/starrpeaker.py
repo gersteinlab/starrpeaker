@@ -35,45 +35,38 @@ args = parser.parse_args()
 
 def main():
     ### make bin with specified window length and step size
-    core.make_bin(args.chromsize,
-                  args.length,
-                  args.step,
-                  args.blacklist,
-                  args.prefix + ".bin.bed")
+    core.make_bin(chromSize=args.chromsize,
+                  binLength=args.length,
+                  stepSize=args.step,
+                  blackList=args.blacklist,
+                  fileOut=args.prefix + ".bin.bed")
 
     ### process covariates
-    core.proc_cov(args.cov,
-                  args.prefix + ".bin.bed",
-                  args.prefix + ".cov.tsv")
+    core.proc_cov(bwFiles=args.cov,
+                  bedFile=args.prefix + ".bin.bed",
+                  fileOut=args.prefix + ".cov.tsv")
 
-    ### process output bam
-    core.proc_bam(args.output,
-                  args.prefix + ".bin.bed",
-                  args.chromsize,
-                  args.prefix + ".output.tsv",
-                  args.min,
-                  args.max)
-
-    ### process input bam
-    core.proc_bam(args.input,
-                  args.prefix + ".bin.bed",
-                  args.chromsize,
-                  args.prefix + ".input.tsv",
-                  args.min,
-                  args.max)
-
-    totalInput = core.count_total_proper_templates(args.input[0], args.min, args.max)
-    totalOutput = core.count_total_proper_templates(args.output[0], args.min, args.max)
+    ### process input, output bam
+    core.proc_bam(bamFiles=[args.input, args.output],
+                  bedFile=args.prefix + ".bin.bed",
+                  chromSize=args.chromsize,
+                  fileOut=args.prefix + ".bam.bct",
+                  minSize=args.min,
+                  maxSize=args.max,
+                  normalize=True)
 
     ### call peaks
-    core.call_peak(args.prefix + ".input.tsv",
-                   args.prefix + ".output.tsv",
-                   args.prefix + ".cov.tsv",
-                   args.prefix + ".bin.bed",
-                   args.prefix + ".peak.bed",
-                   args.threshold,
-                   totalInput,
-                   totalOutput)
+    core.call_peak(bctFile=args.prefix + ".bam.bct",
+                   covFile=args.prefix + ".cov.tsv",
+                   bedFile=args.prefix + ".bin.bed",
+                   fileOut=args.prefix + ".peak.bed",
+                   threshold=args.threshold)
+
+    ### make signal tracks
+    core.make_bigwig(chromsize=args.chromsize,
+                     bedFile=args.prefix + ".bin.bed",
+                     bctFile=args.prefix + ".bam.bct",
+                     prefix=args.prefix)
 
 
 if __name__ == "__main__": main()

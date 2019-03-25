@@ -22,6 +22,7 @@ import statsmodels.stats.multitest as multi
 import os, uuid, datetime
 from itertools import compress
 
+
 def timestamp():
     return str(datetime.datetime.now()).split('.')[0]
 
@@ -111,8 +112,26 @@ def count_total_proper_templates(bam, minSize, maxSize):
     return proper_template_count
 
 
-def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize):
+def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=False):
+    '''
+
+    Args:
+        bamFiles: list of BAM files eg. [input.bam output.bam]
+        bedFile: bin BED file
+        chromSize: chrom size file
+        fileOut: output file
+        minSize: minimum size of fragment insert to consider
+        maxSize: maximum size of fragment insert to consider
+        normalize: if True, normalized input count is added to additional column
+
+    Returns:
+        writes bin count output file
+
+    '''
     print("[%s] Counting template depth per bin %s" % (timestamp(), bedFile))
+
+    ### initialize numpy array
+    tct = np.zeros(shape=(len(bamFiles)), dtype=int)
 
     ### initialize numpy array
     mat = np.zeros(shape=(sum(1 for l in open(bedFile)), len(bamFiles)), dtype=int)
@@ -169,8 +188,10 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize):
             ### delete bed
             safe_remove("tmp" + uid + str(j) + chr + ".bed")
 
+        tct[j] += proper_template_count
+
         print("[%s] Total mapped reads: %i" % (timestamp(), b.mapped))
-        print("[%s] %i proper pairs" % (timestamp(), proper_pair_count))
+        print("[%s] %i reads in proper pairs" % (timestamp(), proper_pair_count))
         print("[%s] %i chimeric reads removed" % (timestamp(), chimeric_count))
         print("[%s] %i templates extracted" % (timestamp(), template_count))
         print("[%s] %i templates used for count" % (timestamp(), proper_template_count))
@@ -200,9 +221,15 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize):
         ### delete tmp merged bed files
         safe_remove("tmp" + uid + str(j) + ".merged.bed")
 
-    np.savetxt(fileOut, mat, fmt='%i', delimiter="\t")
+    if normalize:
+        ### normalize input count
+        normalized_input = mat[:, 0] * (tct[1] / tct[0])
+        np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%.5f', delimiter="\t")
+    else:
+        np.savetxt(fileOut, mat, fmt='%i', delimiter="\t")
+
     print("[%s] Done" % (timestamp()))
-    del a, mat
+    del a, mat, tct
 
 
 def trigamma(x):
@@ -255,40 +282,33 @@ def theta(y, mu, verbose=False):
     return t0, se
 
 
-def call_peak(inputFile, outputFile, covFile, bedFile, fileOut, threshold, totalInput, totalOutput):
+def call_peak(bctFile, covFile, bedFile, fileOut, threshold):
     print("[%s] Calling peaks" % (timestamp()))
 
     ### load data
     print("[%s] Loading response, exposure, and covariates" % (timestamp()))
-    input = np.loadtxt(inputFile).reshape((-1, 1))
-    output = np.loadtxt(outputFile).reshape((-1, 1))
-    cov = np.loadtxt(covFile)
-
-    ### normalize input count
-    if totalOutput != 0 and totalInput != 0:
-        normalized_input = input * (totalOutput / totalInput)
-    else:
-        normalized_input = input * (sum(output) / sum(input))
+    bct = np.loadtxt(bctFile, ndmin=2)
+    cov = np.loadtxt(covFile, ndmin=2)
 
     ### merge data
-    mat = np.concatenate((output, normalized_input, cov), axis=1)
-    del input, normalized_input, output, cov
+    mat = np.concatenate((bct[:, 1:], cov), axis=1)
+    del bct, cov
 
     ### remove bins with zero input count (i.e., untested region)
     nonZeroInput = mat[:, 1] != 0
 
     ### non sliding bins
-    nonSliding = np.zeros(mat.shape[0], dtype=bool) ### initialize with False
+    nonSliding = np.zeros(mat.shape[0], dtype=bool)  ### initialize with False
     with open(bedFile, "r") as bed:
-        lastchr,lastbin="",0
+        lastchr, lastbin = "", 0
         for i, bin in enumerate(bed.readlines()):
             if bin.split("\t")[0] != lastchr:
-                lastchr=bin.split("\t")[0]
-                lastbin=int(bin.split("\t")[2])
-                nonSliding[i]=True
+                lastchr = bin.split("\t")[0]
+                lastbin = int(bin.split("\t")[2])
+                nonSliding[i] = True
             elif int(bin.split("\t")[1]) >= lastbin:
-                lastbin=int(bin.split("\t")[2])
-                nonSliding[i]=True
+                lastbin = int(bin.split("\t")[2])
+                nonSliding[i] = True
 
     ### filter inputs with zero
     print("[%s] Removing %i bins with zero input" % (timestamp(), sum(np.invert(nonZeroInput))))
@@ -309,7 +329,7 @@ def call_peak(inputFile, outputFile, covFile, bedFile, fileOut, threshold, total
     # print model0.summary()
 
     ### Estimate theta
-    th0, _ = theta(mat[nonZeroInput & nonSliding,:][:,0], model0.mu)
+    th0, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model0.mu)
     print("[%s] Initial estimate of theta is %f" % (timestamp(), th0))
 
     ### re-estimate beta with theta
@@ -319,7 +339,7 @@ def call_peak(inputFile, outputFile, covFile, bedFile, fileOut, threshold, total
     # print model.summary()
 
     ### Re-estimate theta
-    th, _ = theta(mat[nonZeroInput & nonSliding,:][:,0], model.mu)
+    th, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model.mu)
     print("[%s] Re-estimate of theta is %f" % (timestamp(), th))
 
     ### predict
@@ -346,7 +366,64 @@ def call_peak(inputFile, outputFile, covFile, bedFile, fileOut, threshold, total
                 if pval_adj[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
                         bin.strip(), p_score[i], q_score[i], pval[i], pval_adj[i]))
-    pybedtools.BedTool(fileOut).merge(c=[4,5,6,7],o=["max","max","min","min"]).saveas(fileOut.replace(".bed","")+".merged.bed")
+    pybedtools.BedTool(fileOut).merge(c=[4, 5, 6, 7], o=["max", "max", "min", "min"]).saveas(
+        fileOut.replace(".bed", "") + ".merged.bed")
 
     print("[%s] Done" % (timestamp()))
 
+
+def make_bigwig(chromsize, bedFile, bctFile, prefix):
+    print("[%s] Making BigWig Tracks" % (timestamp()))
+    with open(chromsize) as f: cs = [line.strip().split('\t') for line in f.readlines()]
+
+    bin = np.genfromtxt(bedFile, dtype='str')
+    bct = np.loadtxt(bctFile, dtype=np.float32, ndmin=2)
+
+    chroms = np.array(bin[:, 0], dtype='str')
+    starts = np.array(bin[:, 1], dtype=np.int32)
+    ends = np.array(bin[:, 2], dtype=np.int32)
+
+    ### input signal
+
+    val_input = np.array(bct[:, 0], dtype=np.float32)
+
+    bw0 = pyBigWig.open(prefix + ".input.bw", "w")
+    bw0.addHeader([(x[0], int(x[1])) for x in cs], maxZooms=0)
+    bw0.addEntries(chroms=chroms[np.nonzero(val_input)], starts=starts[np.nonzero(val_input)],
+                   ends=ends[np.nonzero(val_input)], values=val_input[np.nonzero(val_input)])
+    bw0.close()
+
+    ### output signal
+
+    val_output = np.array(bct[:, 1], dtype=np.float32)
+
+    bw1 = pyBigWig.open(prefix + ".output.bw", "w")
+    bw1.addHeader([(x[0], int(x[1])) for x in cs], maxZooms=0)
+    bw1.addEntries(chroms=chroms[np.nonzero(val_output)], starts=starts[np.nonzero(val_output)],
+                   ends=ends[np.nonzero(val_output)], values=val_output[np.nonzero(val_output)])
+    bw1.close()
+
+    ### normalized input signal
+
+    val_normalized_input = np.array(bct[:, 2], dtype=np.float32)
+
+    bw2 = pyBigWig.open(prefix + ".normalized_input.bw", "w")
+    bw2.addHeader([(x[0], int(x[1])) for x in cs], maxZooms=0)
+    bw2.addEntries(chroms=chroms[np.nonzero(val_normalized_input)], starts=starts[np.nonzero(val_normalized_input)],
+                   ends=ends[np.nonzero(val_normalized_input)],
+                   values=val_normalized_input[np.nonzero(val_normalized_input)])
+    bw2.close()
+
+    ### fold change
+
+    chroms_fc = chroms[np.nonzero(val_normalized_input)]
+    starts_fc = starts[np.nonzero(val_normalized_input)]
+    ends_fc = ends[np.nonzero(val_normalized_input)]
+    val_fc = val_output[np.nonzero(val_normalized_input)] / val_normalized_input[np.nonzero(val_normalized_input)]
+
+    bw3 = pyBigWig.open(prefix + ".fc.bw", "w")
+    bw3.addHeader([(x[0], int(x[1])) for x in cs], maxZooms=0)
+    bw3.addEntries(chroms=chroms_fc, starts=starts_fc, ends=ends_fc, values=val_fc)
+    bw3.close()
+
+    print("[%s] Done" % (timestamp()))
