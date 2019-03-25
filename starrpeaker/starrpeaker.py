@@ -22,8 +22,8 @@ parser.add_argument('-l', '--length', help='Bin Length', required=False, default
 parser.add_argument('-s', '--step', help='Step Size', required=False, default=100)
 parser.add_argument('-x', '--blacklist', help='Blacklist Region in BED format', required=True)
 parser.add_argument('--cov', help='Covariate BigWig Files', nargs='+', required=True)
-parser.add_argument('-i', '--input', help='Input BAM File', nargs='+', required=True)
-parser.add_argument('-o', '--output', help='STARR-seq BAM File', nargs='+', required=True)
+parser.add_argument('-i', '--input', help='Input BAM File', required=True)
+parser.add_argument('-o', '--output', help='STARR-seq BAM File', required=True)
 
 ### optional args
 parser.add_argument('--min', help='Minimum Template Size', required=False, default=100)
