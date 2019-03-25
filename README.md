@@ -1,9 +1,9 @@
-# starrpeaker
+# StarrPeaker
 Peak caller for STARR-seq data
 
 ## Dependencies
 
-* Python 2.7 (tested on Python 2.7.10)
+* Python 2.7 (tested on Python 2.7.10-2.7.15)
 * pysam
 * pybedtools
 * pyBigWig
@@ -21,7 +21,19 @@ sudo python setup.py install --record files.txt
 starrpeaker -h
 ```
 
-## Input
+## Preprocessing
+
+*Few notes on how alignment (BAM) files were prepared*
+
+For each biological replicates FASTQ from 
+
+1. Aligned paired-end reads using BWA mem (v0.7.17)
+2. Filtered alignments using SAMtools (v1.5)
+filter: -F 1804 exclude FLAG 1804: unmapped, next segment unmapped, secondary alignments, not passing platform q, PCR or optical duplicates; -f 2 require FLAG 2: properly aligned; -q 30 exclude MAPQ < 30; -u uncompressed output; 
+3. Removed duplicates using picard (v2.9.0)
+4. Merged biological replicates using SAMtools
+
+## Inputs
 
 * Input alignment (BAM) file
 * Output alignment (BAM) file
@@ -83,11 +95,11 @@ optional args
 starrpeaker --prefix <prefix for output files> --chromsize <hg38.chrom.sizes> --blacklist <blacklist_GRCh38.bed> --cov <covariate 1: gc content> <covariate 2: mappability> <covariate 3: conservation> --input <input.bam> --output <output.bam>
 ```
 
-## Output
+## Outputs
 
-* <prefix>.input.tsv: input count
-* <prefix>.output.tsv: output count
-* <prefix>.cov.tsv: covariate matrix
-* <prefix>.bin.bed: bin
-* <prefix>.peak.bed: peaks per bin
-* <prefix>.peak.merged.bed: merged peaks
+* *prefix*.input.tsv: input count
+* *prefix*.output.tsv: output count
+* *prefix*.cov.tsv: covariate matrix
+* *prefix*.bin.bed: bin
+* *prefix*.peak.bed: peaks per bin
+* *prefix*.peak.merged.bed: merged peaks
