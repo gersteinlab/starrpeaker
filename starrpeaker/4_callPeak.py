@@ -16,18 +16,18 @@ import core
 parser = argparse.ArgumentParser(description='Call Peaks')
 
 ### required args
+parser.add_argument('-p', '--prefix', help='Output File Prefix', required=True)
+parser.add_argument('--bed', help='Bin BED File', required=True)
 parser.add_argument('--bct', help='Bincount BCT File', required=True)
 parser.add_argument('-c', '--cov', help='Covariate File', required=True)
-parser.add_argument('--bed', help='Bin BED File', required=True)
-parser.add_argument('-p', '--prefix', help='Output File Prefix', required=True)
 
 ### optional args
 parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
 
 args = parser.parse_args()
 
-if __name__ == "__main__": core.call_peak(bctFile=args.bct,
-                                          covFile=args.cov,
+if __name__ == "__main__": core.call_peak(prefix=args.prefix,
                                           bedFile=args.bed,
-                                          fileOut=args.prefix + ".peak.bed",
+                                          bctFile=args.bct,
+                                          covFile=args.cov,
                                           threshold=args.threshold)

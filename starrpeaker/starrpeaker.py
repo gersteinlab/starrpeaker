@@ -56,17 +56,18 @@ def main():
                   normalize=True)
 
     ### call peaks
-    core.call_peak(bctFile=args.prefix + ".bam.bct",
-                   covFile=args.prefix + ".cov.tsv",
+    core.call_peak(prefix=args.prefix,
                    bedFile=args.prefix + ".bin.bed",
-                   fileOut=args.prefix + ".peak.bed",
+                   bctFile=args.prefix + ".bam.bct",
+                   covFile=args.prefix + ".cov.tsv",
                    threshold=args.threshold)
 
     ### make signal tracks
-    core.make_bigwig(chromsize=args.chromsize,
+    core.make_bigwig(prefix=args.prefix,
                      bedFile=args.prefix + ".bin.bed",
                      bctFile=args.prefix + ".bam.bct",
-                     prefix=args.prefix)
+                     chromsize=args.chromsize,
+                     bedGraphFile=args.prefix + ".pval.bedGraph")
 
 
 if __name__ == "__main__": main()

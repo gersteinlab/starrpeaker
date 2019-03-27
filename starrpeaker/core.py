@@ -282,7 +282,7 @@ def theta(y, mu, verbose=False):
     return t0, se
 
 
-def call_peak(bctFile, covFile, bedFile, fileOut, threshold):
+def call_peak(prefix, bedFile, bctFile, covFile, threshold):
     print("[%s] Calling peaks" % (timestamp()))
 
     ### load data
@@ -360,70 +360,115 @@ def call_peak(bctFile, covFile, bedFile, fileOut, threshold):
     q_score = -np.log10(pval_adj)
 
     ### output
-    with open(fileOut, "w") as out:
+    with open(prefix+".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
                 if pval_adj[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
                         bin.strip(), p_score[i], q_score[i], pval[i], pval_adj[i]))
-    pybedtools.BedTool(fileOut).merge(c=[4, 5, 6, 7], o=["max", "max", "min", "min"]).saveas(
-        fileOut.replace(".bed", "") + ".merged.bed")
+    pybedtools.BedTool(prefix+".peak.bed").merge(c=[4, 5, 6, 7], o=["max", "max", "min", "min"]).saveas(
+        prefix+".peak.merged.bed")
+
+    ### output p-val track
+    with open(prefix+".pval.bedGraph", "w") as out:
+        with open(bedFile, "r") as bed:
+            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
+                out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
 
     print("[%s] Done" % (timestamp()))
 
+def make_pval_bigwig(prefix, bedGraphFile, chromsize):
+    print("[%s] Making P-value BigWig Tracks" % (timestamp()))
+    with open(chromsize) as f: cs = [line.strip().split('\t') for line in f.readlines()]
 
-def make_bigwig(chromsize, bedFile, bctFile, prefix):
+    bin = np.genfromtxt(bedGraphFile, dtype=str)
+
+    starts = np.array(bin[:,1], dtype=np.int64)
+    ends = np.array(bin[:,2], dtype=np.int64)
+
+    l=ends[0]-starts[0]
+    s=starts[1]-starts[0]
+    print("[%s] Using fixed interval of %i" % (timestamp(),s))
+
+    nonoverlapping = ends-starts == l
+
+    chroms = (np.array(bin[:,0]))[nonoverlapping]
+    starts = (np.array(bin[:,1], dtype=np.int64) + int(l/2) - int(s/2))[nonoverlapping]
+    ends = (np.array(bin[:,2], dtype=np.int64) - int(l/2) + int(s/2))[nonoverlapping]
+    val_pval = np.array(bin[:,3], dtype=np.float64)[nonoverlapping]
+
+    ### pval signal
+
+    bw = pyBigWig.open(prefix + ".pval.bw", "w")
+    bw.addHeader([(str(x[0]), int(x[1])) for x in cs])
+    bw.addEntries(chroms=chroms, starts=starts, ends=ends, values=val_pval)
+    bw.close()
+
+    print("[%s] Done" % (timestamp()))
+
+def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
     print("[%s] Making BigWig Tracks" % (timestamp()))
     with open(chromsize) as f: cs = [line.strip().split('\t') for line in f.readlines()]
 
-    bin = np.genfromtxt(bedFile, dtype='str')
-    bct = np.loadtxt(bctFile, dtype=np.float32, ndmin=2)
+    bin = np.genfromtxt(bedFile, dtype=str)
+    bct = np.loadtxt(bctFile, dtype=np.float64, ndmin=2)
 
-    chroms = np.array(bin[:, 0], dtype='str')
-    starts = np.array(bin[:, 1], dtype=np.int32)
-    ends = np.array(bin[:, 2], dtype=np.int32)
+    starts = np.array(bin[:,1], dtype=np.int64)
+    ends = np.array(bin[:,2], dtype=np.int64)
 
-    ### input signal
+    l=ends[0]-starts[0]
+    s=starts[1]-starts[0]
+    print("[%s] Using fixed interval of %i" % (timestamp(),s))
 
-    val_input = np.array(bct[:, 0], dtype=np.float32)
+    nonoverlapping = ends-starts == l
 
-    bw0 = pyBigWig.open(prefix + ".input.bw", "w")
-    bw0.addHeader([(x[0], int(x[1])) for x in cs], maxZooms=0)
-    bw0.addEntries(chroms=chroms[np.nonzero(val_input)], starts=starts[np.nonzero(val_input)],
-                   ends=ends[np.nonzero(val_input)], values=val_input[np.nonzero(val_input)])
-    bw0.close()
-
-    ### output signal
-
-    val_output = np.array(bct[:, 1], dtype=np.float32)
-
-    bw1 = pyBigWig.open(prefix + ".output.bw", "w")
-    bw1.addHeader([(x[0], int(x[1])) for x in cs], maxZooms=0)
-    bw1.addEntries(chroms=chroms[np.nonzero(val_output)], starts=starts[np.nonzero(val_output)],
-                   ends=ends[np.nonzero(val_output)], values=val_output[np.nonzero(val_output)])
-    bw1.close()
-
-    ### normalized input signal
-
-    val_normalized_input = np.array(bct[:, 2], dtype=np.float32)
-
-    bw2 = pyBigWig.open(prefix + ".normalized_input.bw", "w")
-    bw2.addHeader([(x[0], int(x[1])) for x in cs], maxZooms=0)
-    bw2.addEntries(chroms=chroms[np.nonzero(val_normalized_input)], starts=starts[np.nonzero(val_normalized_input)],
-                   ends=ends[np.nonzero(val_normalized_input)],
-                   values=val_normalized_input[np.nonzero(val_normalized_input)])
-    bw2.close()
-
-    ### fold change
+    chroms = (np.array(bin[:,0]))[nonoverlapping]
+    starts = (np.array(bin[:,1], dtype=np.int64) + int(l/2) - int(s/2))[nonoverlapping]
+    ends = (np.array(bin[:,2], dtype=np.int64) - int(l/2) + int(s/2))[nonoverlapping]
+    val_input = np.array(bct[:,0], dtype=np.float64)[nonoverlapping]
+    val_output = np.array(bct[:,1], dtype=np.float64)[nonoverlapping]
+    val_normalized_input = np.array(bct[:,2], dtype=np.float64)[nonoverlapping]
 
     chroms_fc = chroms[np.nonzero(val_normalized_input)]
     starts_fc = starts[np.nonzero(val_normalized_input)]
     ends_fc = ends[np.nonzero(val_normalized_input)]
     val_fc = val_output[np.nonzero(val_normalized_input)] / val_normalized_input[np.nonzero(val_normalized_input)]
 
+    ### input signal
+
+    bw0 = pyBigWig.open(prefix + ".input.bw", "w")
+    bw0.addHeader([(str(x[0]), int(x[1])) for x in cs])
+    bw0.addEntries(chroms=chroms, starts=starts, ends=ends, values=val_input)
+    bw0.close()
+
+    ### output signal
+
+    bw1 = pyBigWig.open(prefix + ".output.bw", "w")
+    bw1.addHeader([(str(x[0]), int(x[1])) for x in cs])
+    bw1.addEntries(chroms=chroms, starts=starts, ends=ends, values=val_output)
+    bw1.close()
+
+    ### normalized input signal
+
+    bw2 = pyBigWig.open(prefix + ".normalized_input.bw", "w")
+    bw2.addHeader([(str(x[0]), int(x[1])) for x in cs])
+    bw2.addEntries(chroms=chroms, starts=starts, ends=ends, values=val_normalized_input)
+    bw2.close()
+
+    ### fold change
+
     bw3 = pyBigWig.open(prefix + ".fc.bw", "w")
-    bw3.addHeader([(x[0], int(x[1])) for x in cs], maxZooms=0)
+    bw3.addHeader([(str(x[0]), int(x[1])) for x in cs])
     bw3.addEntries(chroms=chroms_fc, starts=starts_fc, ends=ends_fc, values=val_fc)
     bw3.close()
 
+    # with open(prefix+".bedGraph","w") as b:
+    #     b.write("track type=bedGraph\n")
+    #     for x in zip(chroms,starts,ends,val_input):
+    #         b.write('\t'.join(map(str,x))+'\n')
+
     print("[%s] Done" % (timestamp()))
+
+    if bedGraphFile!="":
+        make_pval_bigwig(prefix, bedGraphFile, chromsize)
+

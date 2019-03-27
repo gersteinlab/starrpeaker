@@ -16,15 +16,18 @@ import core
 parser = argparse.ArgumentParser(description='Make BigWigs')
 
 ### required args
-
-parser.add_argument('-c', '--chromsize', help='Chrom Sizes', required=True)
+parser.add_argument('-p', '--prefix', help='Output BigWig Prefix', required=True)
 parser.add_argument('--bed', help='Bin BED File', required=True)
 parser.add_argument('--bct', help='Count BCT File', required=True)
-parser.add_argument('-p', '--prefix', help='Output BigWig Prefix', required=True)
+parser.add_argument('-c', '--chromsize', help='Chrom Sizes', required=True)
+
+### optional args
+parser.add_argument('--pval', help='P-value BedGraph File', required=False, default="")
 
 args = parser.parse_args()
 
-if __name__ == "__main__": core.make_bigwig(chromsize=args.chromsize,
-                                            bedFile=args.bin,
+if __name__ == "__main__": core.make_bigwig(prefix=args.prefix,
+                                            bedFile=args.bed,
                                             bctFile=args.bct,
-                                            prefix=args.prefix)
+                                            chromsize=args.chromsize,
+                                            bedGraphFile=args.pval)
