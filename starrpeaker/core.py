@@ -106,7 +106,7 @@ def count_total_proper_templates(bam, minSize, maxSize):
             else:
                 if not read.is_reverse and read.mate_is_reverse:
                     template_count += 1
-                    if read.template_length >= minSize and read.template_length <= maxSize:
+                    if read.template_length >= int(minSize) and read.template_length <= int(maxSize):
                         proper_template_count += 1
     b.close()
     return proper_template_count
@@ -175,7 +175,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
                         else:
                             if not read.is_reverse and read.mate_is_reverse:
                                 template_count += 1
-                                if read.template_length >= minSize and read.template_length <= maxSize:
+                                if read.template_length >= int(minSize) and read.template_length <= int(maxSize):
                                     proper_template_count += 1
                                     s.write("%s\t%i\t%i\n" % ((b.get_reference_name(read.reference_id)),
                                                               (read.reference_start + int(read.template_length / 2)), (
