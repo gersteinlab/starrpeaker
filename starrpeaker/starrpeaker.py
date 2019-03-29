@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(description='STARR-Peaker')
 parser.add_argument('-p', '--prefix', help='Output File Prefix', required=True)
 parser.add_argument('--chromsize', help='Chrom Sizes', required=True)
 parser.add_argument('-l', '--length', help='Bin Length', required=False, default=500)
-parser.add_argument('-s', '--step', help='Step Size', required=False, default=100)
+parser.add_argument('-s', '--step', help='Step Size', required=False, default=50)
 parser.add_argument('-x', '--blacklist', help='Blacklist Region in BED format', required=True)
 parser.add_argument('--cov', help='Covariate BigWig Files', nargs='+', required=True)
 parser.add_argument('-i', '--input', help='Input BAM File', required=True)
@@ -28,7 +28,7 @@ parser.add_argument('-o', '--output', help='STARR-seq BAM File', required=True)
 ### optional args
 parser.add_argument('--min', help='Minimum Template Size', required=False, default=100)
 parser.add_argument('--max', help='Maximum Template Size', required=False, default=1000)
-parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
+parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.01)
 
 args = parser.parse_args()
 
