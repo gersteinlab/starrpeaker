@@ -112,7 +112,7 @@ def count_total_proper_templates(bam, minSize, maxSize):
     return proper_template_count
 
 
-def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=False):
+def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=False, pseudocount=1):
     '''
 
     Args:
@@ -123,6 +123,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
         minSize: minimum size of fragment insert to consider
         maxSize: maximum size of fragment insert to consider
         normalize: if True, normalized input count is added to additional column
+        pseudocount: pseudocount for input normalization
 
     Returns:
         writes bin count output file
@@ -224,6 +225,8 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
     if normalize:
         ### normalize input count
         normalized_input = mat[:, 0] * (tct[1] / tct[0])
+        nonzero = normalized_input != 0
+        normalized_input[nonzero] += pseudocount
         np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%.5f', delimiter="\t")
     else:
         np.savetxt(fileOut, mat, fmt='%i', delimiter="\t")
@@ -360,22 +363,23 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold):
     q_score = -np.log10(pval_adj)
 
     ### output
-    with open(prefix+".peak.bed", "w") as out:
+    with open(prefix + ".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
                 if pval_adj[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
                         bin.strip(), p_score[i], q_score[i], pval[i], pval_adj[i]))
-    pybedtools.BedTool(prefix+".peak.bed").merge(c=[4, 5, 6, 7], o=["max", "max", "min", "min"]).saveas(
-        prefix+".peak.merged.bed")
+    pybedtools.BedTool(prefix + ".peak.bed").merge(c=[4, 5, 6, 7], o=["max", "max", "min", "min"]).saveas(
+        prefix + ".peak.merged.bed")
 
     ### output p-val track
-    with open(prefix+".pval.bedGraph", "w") as out:
+    with open(prefix + ".pval.bedGraph", "w") as out:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
                 out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
 
     print("[%s] Done" % (timestamp()))
+
 
 def make_pval_bigwig(prefix, bedGraphFile, chromsize):
     print("[%s] Making P-value BigWig Tracks" % (timestamp()))
@@ -383,19 +387,19 @@ def make_pval_bigwig(prefix, bedGraphFile, chromsize):
 
     bin = np.genfromtxt(bedGraphFile, dtype=str)
 
-    starts = np.array(bin[:,1], dtype=np.int64)
-    ends = np.array(bin[:,2], dtype=np.int64)
+    starts = np.array(bin[:, 1], dtype=np.int64)
+    ends = np.array(bin[:, 2], dtype=np.int64)
 
-    l=ends[0]-starts[0]
-    s=starts[1]-starts[0]
-    print("[%s] Using fixed interval of %i" % (timestamp(),s))
+    l = ends[0] - starts[0]
+    s = starts[1] - starts[0]
+    print("[%s] Using fixed interval of %i" % (timestamp(), s))
 
-    nonoverlapping = ends-starts == l
+    nonoverlapping = ends - starts == l
 
-    chroms = (np.array(bin[:,0]))[nonoverlapping]
-    starts = (np.array(bin[:,1], dtype=np.int64) + int(l/2) - int(s/2))[nonoverlapping]
-    ends = (np.array(bin[:,2], dtype=np.int64) - int(l/2) + int(s/2))[nonoverlapping]
-    val_pval = np.array(bin[:,3], dtype=np.float64)[nonoverlapping]
+    chroms = (np.array(bin[:, 0]))[nonoverlapping]
+    starts = (np.array(bin[:, 1], dtype=np.int64) + int(l / 2) - int(s / 2))[nonoverlapping]
+    ends = (np.array(bin[:, 2], dtype=np.int64) - int(l / 2) + int(s / 2))[nonoverlapping]
+    val_pval = np.array(bin[:, 3], dtype=np.float64)[nonoverlapping]
 
     ### pval signal
 
@@ -406,6 +410,7 @@ def make_pval_bigwig(prefix, bedGraphFile, chromsize):
 
     print("[%s] Done" % (timestamp()))
 
+
 def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
     print("[%s] Making BigWig Tracks" % (timestamp()))
     with open(chromsize) as f: cs = [line.strip().split('\t') for line in f.readlines()]
@@ -413,21 +418,21 @@ def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
     bin = np.genfromtxt(bedFile, dtype=str)
     bct = np.loadtxt(bctFile, dtype=np.float64, ndmin=2)
 
-    starts = np.array(bin[:,1], dtype=np.int64)
-    ends = np.array(bin[:,2], dtype=np.int64)
+    starts = np.array(bin[:, 1], dtype=np.int64)
+    ends = np.array(bin[:, 2], dtype=np.int64)
 
-    l=ends[0]-starts[0]
-    s=starts[1]-starts[0]
-    print("[%s] Using fixed interval of %i" % (timestamp(),s))
+    l = ends[0] - starts[0]
+    s = starts[1] - starts[0]
+    print("[%s] Using fixed interval of %i" % (timestamp(), s))
 
-    nonoverlapping = ends-starts == l
+    nonoverlapping = ends - starts == l
 
-    chroms = (np.array(bin[:,0]))[nonoverlapping]
-    starts = (np.array(bin[:,1], dtype=np.int64) + int(l/2) - int(s/2))[nonoverlapping]
-    ends = (np.array(bin[:,2], dtype=np.int64) - int(l/2) + int(s/2))[nonoverlapping]
-    val_input = np.array(bct[:,0], dtype=np.float64)[nonoverlapping]
-    val_output = np.array(bct[:,1], dtype=np.float64)[nonoverlapping]
-    val_normalized_input = np.array(bct[:,2], dtype=np.float64)[nonoverlapping]
+    chroms = (np.array(bin[:, 0]))[nonoverlapping]
+    starts = (np.array(bin[:, 1], dtype=np.int64) + int(l / 2) - int(s / 2))[nonoverlapping]
+    ends = (np.array(bin[:, 2], dtype=np.int64) - int(l / 2) + int(s / 2))[nonoverlapping]
+    val_input = np.array(bct[:, 0], dtype=np.float64)[nonoverlapping]
+    val_output = np.array(bct[:, 1], dtype=np.float64)[nonoverlapping]
+    val_normalized_input = np.array(bct[:, 2], dtype=np.float64)[nonoverlapping]
 
     chroms_fc = chroms[np.nonzero(val_normalized_input)]
     starts_fc = starts[np.nonzero(val_normalized_input)]
@@ -469,6 +474,5 @@ def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
 
     print("[%s] Done" % (timestamp()))
 
-    if bedGraphFile!="":
+    if bedGraphFile != "":
         make_pval_bigwig(prefix, bedGraphFile, chromsize)
-

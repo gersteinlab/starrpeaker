@@ -29,6 +29,7 @@ parser.add_argument('-o', '--output', help='STARR-seq BAM File', required=True)
 parser.add_argument('--min', help='Minimum Template Size', required=False, default=100)
 parser.add_argument('--max', help='Maximum Template Size', required=False, default=1000)
 parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.01)
+parser.add_argument('--pseudocount', help='Pseudocount for Input Normalization', required=False, default=1)
 
 args = parser.parse_args()
 
@@ -53,7 +54,8 @@ def main():
                   fileOut=args.prefix + ".bam.bct",
                   minSize=args.min,
                   maxSize=args.max,
-                  normalize=True)
+                  normalize=True,
+                  pseudocount=args.pseudocount)
 
     ### call peaks
     core.call_peak(prefix=args.prefix,
