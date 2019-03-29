@@ -226,7 +226,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
         ### normalize input count
         normalized_input = mat[:, 0] * (tct[1] / tct[0])
         nonzero = normalized_input != 0
-        normalized_input[nonzero] += pseudocount
+        normalized_input[nonzero] += float(pseudocount)
         np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%.5f', delimiter="\t")
     else:
         np.savetxt(fileOut, mat, fmt='%i', delimiter="\t")
