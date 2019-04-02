@@ -220,7 +220,101 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
         mat[:, j] = np.array([int(l.split("\t")[3]) for l in str(readDepth).rstrip("\n").split("\n")])
 
         ### delete tmp merged bed files
-        safe_remove("tmp" + uid + str(j) + ".merged.bed")
+        # safe_remove("tmp" + uid + str(j) + ".merged.bed")
+        os.rename("tmp" + uid + str(j) + ".merged.bed", fileOut + "." + str(j) + ".bdg")
+
+    if normalize:
+        ### normalize input count
+        normalized_input = mat[:, 0] * (tct[1] / tct[0])
+        nonzero = normalized_input != 0
+        normalized_input[nonzero] += float(pseudocount)
+        np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%.5f', delimiter="\t")
+    else:
+        np.savetxt(fileOut, mat, fmt='%i', delimiter="\t")
+
+    print("[%s] Done" % (timestamp()))
+    del a, mat, tct
+
+
+def proc_bam_readstart(bamFiles, bedFile, chromSize, fileOut, normalize=False, pseudocount=1):
+    print("[%s] Counting template depth per bin %s" % (timestamp(), bedFile))
+
+    ### initialize numpy array
+    tct = np.zeros(shape=(len(bamFiles)), dtype=int)
+
+    ### initialize numpy array
+    mat = np.zeros(shape=(sum(1 for l in open(bedFile)), len(bamFiles)), dtype=int)
+
+    ### random unique ID
+    uid = get_uid()
+
+    ### load bin bed file
+    a = pybedtools.BedTool(bedFile)
+
+    for j, bam in enumerate(bamFiles):
+        print("[%s] Processing %s" % (timestamp(), bam))
+
+        if not os.path.exists(bam + ".bai"):
+            print("[%s] (Warning) Index not found: %s" % (timestamp(), bam))
+            print("[%s] Indexing %s" % (timestamp(), bam))
+            pysam.index(bam)
+
+        b = pysam.AlignmentFile(bam, "rb")
+
+        proper_pair_count = 0
+        chimeric_count = 0
+        template_count = 0
+        proper_template_count = 0
+
+        for chr in list_chr(chromSize):
+
+            print("[%s] Processing %s" % (timestamp(), chr))
+
+            with open("tmp" + uid + str(j) + chr + ".bed", "w") as s:
+                for read in b.fetch(reference=chr):
+                    s.write("%s\t%i\t%i\n" % ((b.get_reference_name(read.reference_id)), (read.reference_start),
+                                              (read.reference_start + 1)))  ## start position of read
+
+            print("[%s] Sorting %s" % (timestamp(), chr))
+            pybedtools.BedTool("tmp" + uid + str(j) + chr + ".bed").sort().saveas(
+                "tmp" + uid + str(j) + chr + "sorted.bed")
+
+            ### delete bed
+            safe_remove("tmp" + uid + str(j) + chr + ".bed")
+
+        tct[j] += proper_template_count
+
+        print("[%s] Total mapped reads: %i" % (timestamp(), b.mapped))
+        print("[%s] %i reads in proper pairs" % (timestamp(), proper_pair_count))
+        print("[%s] %i chimeric reads removed" % (timestamp(), chimeric_count))
+        print("[%s] %i templates extracted" % (timestamp(), template_count))
+        print("[%s] %i templates used for count" % (timestamp(), proper_template_count))
+
+        b.close()
+
+        ### merge bed
+        print("[%s] Merging BED files" % (timestamp()))
+        with open("tmp" + uid + str(j) + ".merged.bed", "a") as merged:
+            for chr in list_chr(chromSize):
+
+                ### merge tmp bed files
+                with open("tmp" + uid + str(j) + chr + "sorted.bed", "r") as t:
+                    if t.read(1).strip():
+                        t.seek(0)
+                        merged.write(t.read())
+
+                ### delete tmp bed files
+                safe_remove("tmp" + uid + str(j) + chr + "sorted.bed")
+
+        print("[%s] Counting depth per bin" % (timestamp()))
+        readDepth = a.coverage(pybedtools.BedTool("tmp" + uid + str(j) + ".merged.bed"), sorted=True, counts=True)
+
+        ### extract 4th column, which is read counts, and assign as numpy array
+        mat[:, j] = np.array([int(l.split("\t")[3]) for l in str(readDepth).rstrip("\n").split("\n")])
+
+        ### delete tmp merged bed files
+        # safe_remove("tmp" + uid + str(j) + ".merged.bed")
+        os.rename("tmp" + uid + str(j) + ".merged.bed", fileOut + "." + str(j) + ".bdg")
 
     if normalize:
         ### normalize input count
@@ -285,20 +379,22 @@ def theta(y, mu, verbose=False):
     return t0, se
 
 
-def call_peak(prefix, bedFile, bctFile, covFile, threshold):
+def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0):
     print("[%s] Calling peaks" % (timestamp()))
 
     ### load data
     print("[%s] Loading response, exposure, and covariates" % (timestamp()))
-    bct = np.loadtxt(bctFile, ndmin=2)
+    bct = np.loadtxt(bctFile, ndmin=2)  # input, output, normalized input
     cov = np.loadtxt(covFile, ndmin=2)
 
     ### merge data
-    mat = np.concatenate((bct[:, 1:], cov), axis=1)
+    mat = np.concatenate((bct[:, 1:], cov), axis=1)  # output, normalized input
     del bct, cov
 
-    ### remove bins with zero input count (i.e., untested region)
-    nonZeroInput = mat[:, 1] != 0
+    ### remove bins with normalized input count of zero (i.e., untested region) OR below "minimum threshold" defined by minInputQuantile
+    minInput = np.quantile(mat[(mat[:, 1] > 0), 1], float(minInputQuantile))
+    print("[%s] Minimum Normalized Input Coverage: %f" % (timestamp(), minInput))
+    nonZeroInput = mat[:, 1] > minInput
 
     ### non sliding bins
     nonSliding = np.zeros(mat.shape[0], dtype=bool)  ### initialize with False
@@ -314,11 +410,13 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold):
                 nonSliding[i] = True
 
     ### filter inputs with zero
-    print("[%s] Removing %i bins with zero input" % (timestamp(), sum(np.invert(nonZeroInput))))
+    print("[%s] Removing %i bins with insufficient input coverage" % (timestamp(), sum(np.invert(nonZeroInput))))
+    print("[%s] Removing %i sliding bins" % (timestamp(), sum(np.invert(nonSliding))))
+
     print("[%s] Before filtering: %s" % (timestamp(), mat.shape))
-    print("[%s] After filtering: %s" % (timestamp(), mat[nonZeroInput, :].shape))
+    print("[%s] Bins with sufficient input coverage: %s" % (timestamp(), mat[nonZeroInput, :].shape))
     print("[%s] Non sliding bin: %s" % (timestamp(), mat[nonSliding, :].shape))
-    print("[%s] Non zero input & Non sliding bin: %s" % (timestamp(), mat[nonZeroInput & nonSliding, :].shape))
+    print("[%s] After filtering:: %s" % (timestamp(), mat[nonZeroInput & nonSliding, :].shape))
 
     ### formula
     x = ["x" + str(i) for i in range(1, mat.shape[1] - 1)]

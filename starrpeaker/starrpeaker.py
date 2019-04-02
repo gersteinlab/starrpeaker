@@ -28,8 +28,9 @@ parser.add_argument('-o', '--output', help='STARR-seq BAM File', required=True)
 ### optional args
 parser.add_argument('--min', help='Minimum Template Size', required=False, default=100)
 parser.add_argument('--max', help='Maximum Template Size', required=False, default=1000)
-parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.01)
+parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
 parser.add_argument('--pseudocount', help='Pseudocount for Input Normalization', required=False, default=1)
+parser.add_argument('-q', '--minquantile', help='Minimum Input Quantile', required=False, default=0.1)
 
 args = parser.parse_args()
 
@@ -62,7 +63,8 @@ def main():
                    bedFile=args.prefix + ".bin.bed",
                    bctFile=args.prefix + ".bam.bct",
                    covFile=args.prefix + ".cov.tsv",
-                   threshold=args.threshold)
+                   threshold=args.threshold,
+                   minInputQuantile=args.minquantile)
 
     ### make signal tracks
     core.make_bigwig(prefix=args.prefix,
