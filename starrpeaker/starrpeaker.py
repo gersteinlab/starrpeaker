@@ -30,7 +30,7 @@ parser.add_argument('--min', help='Minimum Template Size', required=False, defau
 parser.add_argument('--max', help='Maximum Template Size', required=False, default=1000)
 parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
 parser.add_argument('--pseudocount', help='Pseudocount for Input Normalization', required=False, default=1)
-parser.add_argument('-q', '--minquantile', help='Minimum Input Quantile', required=False, default=0.1)
+parser.add_argument('-q', '--minquantile', help='Minimum Input Quantile', required=False, default=0.2)
 
 args = parser.parse_args()
 

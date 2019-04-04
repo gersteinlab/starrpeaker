@@ -23,7 +23,7 @@ parser.add_argument('-c', '--cov', help='Covariate File', required=True)
 
 ### optional args
 parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
-parser.add_argument('-q', '--minquantile', help='Minimum Input Quantile', required=False, default=0.1)
+parser.add_argument('-q', '--minquantile', help='Minimum Input Quantile', required=False, default=0.2)
 
 args = parser.parse_args()
 

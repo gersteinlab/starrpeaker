@@ -214,14 +214,18 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
                 safe_remove("tmp" + uid + str(j) + chr + "sorted.bed")
 
         print("[%s] Counting depth per bin" % (timestamp()))
-        readDepth = a.coverage(pybedtools.BedTool("tmp" + uid + str(j) + ".merged.bed"), sorted=True, counts=True)
+        mergedBed = pybedtools.BedTool("tmp" + uid + str(j) + ".merged.bed")
+        readDepth = a.coverage(mergedBed, sorted=True, counts=True)
 
         ### extract 4th column, which is read counts, and assign as numpy array
         mat[:, j] = np.array([int(l.split("\t")[3]) for l in str(readDepth).rstrip("\n").split("\n")])
 
+        ### save genome coverage
+        mergedBed.genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + str(j) + ".bdg")
+
         ### delete tmp merged bed files
-        # safe_remove("tmp" + uid + str(j) + ".merged.bed")
-        os.rename("tmp" + uid + str(j) + ".merged.bed", fileOut + "." + str(j) + ".bdg")
+        safe_remove("tmp" + uid + str(j) + ".merged.bed")
+        del merged, readDepth
 
     if normalize:
         ### normalize input count
@@ -460,21 +464,28 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0):
     p_score = -np.log10(pval)
     q_score = -np.log10(pval_adj)
 
-    ### output
+    ### output peak
     with open(prefix + ".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
                 if pval_adj[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
                         bin.strip(), p_score[i], q_score[i], pval[i], pval_adj[i]))
+
+    ### merge peak
     pybedtools.BedTool(prefix + ".peak.bed").merge(c=[4, 5, 6, 7], o=["max", "max", "min", "min"]).saveas(
         prefix + ".peak.merged.bed")
+
+    ### center peak
+    center_peak(prefix + ".peak.merged.bed", bctFile + ".1.bdg", prefix + ".peak.final.bed")
 
     ### output p-val track
     with open(prefix + ".pval.bedGraph", "w") as out:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
                 out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
+
+    ### center peak
 
     print("[%s] Done" % (timestamp()))
 
@@ -574,3 +585,18 @@ def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
 
     if bedGraphFile != "":
         make_pval_bigwig(prefix, bedGraphFile, chromsize)
+
+
+def center_peak(peakFile, coverageFile, centeredPeakFile):
+    peaks = pybedtools.BedTool(peakFile)
+    bdg = pybedtools.BedTool(coverageFile)
+    with open(centeredPeakFile, "w") as out:
+        for p in peaks:
+            chr = p[0]
+            size = int(p[2]) - int(p[1])
+            other = '\t'.join(p[3:])
+            depth = np.array([[int(int(x[8])+int(x[9])/2), int(x[10])] for x in
+                              pybedtools.BedTool('\t'.join(p), from_string=True).intersect(bdg, wa=True, wb=True)])
+            maxidx = np.argmax(depth, axis=0)[1]
+            peakpos = depth[maxidx, 0]
+            out.write('\t'.join([chr, str(peakpos - size / 2), str(peakpos + size / 2), other]) + '\n')
