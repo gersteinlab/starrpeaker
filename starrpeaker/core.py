@@ -589,13 +589,13 @@ def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
 
 def center_peak(peakFile, coverageFile, centeredPeakFile):
     peaks = pybedtools.BedTool(peakFile)
-    bdg = pybedtools.BedTool(coverageFile)
+    bdg = pybedtools.BedTool(coverageFile).intersect(peaks, wa=True)
     with open(centeredPeakFile, "w") as out:
         for p in peaks:
             chr = p[0]
             size = int(p[2]) - int(p[1])
             other = '\t'.join(p[3:])
-            depth = np.array([[int(int(x[8])+int(x[9])/2), int(x[10])] for x in
+            depth = np.array([[int(int(x[8]) + int(x[9]) / 2), int(x[10])] for x in
                               pybedtools.BedTool('\t'.join(p), from_string=True).intersect(bdg, wa=True, wb=True)])
             maxidx = np.argmax(depth, axis=0)[1]
             peakpos = depth[maxidx, 0]
