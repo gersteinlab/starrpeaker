@@ -592,7 +592,9 @@ def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
 
 def center_peak(peakFile, coverageFile, centeredPeakFile, windowSize=500):
     peak = pybedtools.BedTool(peakFile)
-    peak_coverage = peak.intersect(pybedtools.BedTool(coverageFile), wa=True, wb=True)
+    bdg = pybedtools.BedTool(coverageFile).intersect(peak)
+    peak_coverage = peak.intersect(bdg, wa=True, wb=True)
+
     coverage = {}
     for pc in peak_coverage:
         pid = pc[0] + "_" + pc[1] + "_" + pc[2]
@@ -600,7 +602,7 @@ def center_peak(peakFile, coverageFile, centeredPeakFile, windowSize=500):
             coverage[pid].append([int(pc[8]), int(pc[9]), int(pc[10])])
         else:
             coverage[pid] = [[int(pc[8]), int(pc[9]), int(pc[10])]]
-    del peak_coverage
+    # del peak_coverage
 
     with open(centeredPeakFile, "w") as out:
         for p in peak:
