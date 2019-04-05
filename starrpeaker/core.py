@@ -476,7 +476,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0):
     pybedtools.BedTool(prefix + ".peak.bed").merge(c=[4, 5, 6, 7], o=["max", "max", "min", "min"]).saveas(
         prefix + ".peak.merged.bed")
 
-    ### center peak
+    ### center merged peak
     center_peak(prefix + ".peak.merged.bed", bctFile + ".1.bdg", prefix + ".peak.final.bed")
 
     ### output p-val track
@@ -484,8 +484,6 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0):
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
                 out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
-
-    ### center peak
 
     print("[%s] Done" % (timestamp()))
 
@@ -587,16 +585,34 @@ def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
         make_pval_bigwig(prefix, bedGraphFile, chromsize)
 
 
-def center_peak(peakFile, coverageFile, centeredPeakFile):
-    peaks = pybedtools.BedTool(peakFile)
-    bdg = pybedtools.BedTool(coverageFile).intersect(peaks, wa=True)
+def center_peak(peakFile, coverageFile, centeredPeakFile, windowSize=500):
+    peak = pybedtools.BedTool(peakFile)
+    peak_coverage = peak.intersect(pybedtools.BedTool(coverageFile), wa=True, wb=True)
+    coverage = {}
+    for pc in peak_coverage:
+        pid = pc[0] + "_" + pc[1] + "_" + pc[2]
+        if pid in coverage:
+            coverage[pid].append([int(pc[8]), int(pc[9]), int(pc[10])])
+        else:
+            coverage[pid] = [[int(pc[8]), int(pc[9]), int(pc[10])]]
     with open(centeredPeakFile, "w") as out:
-        for p in peaks:
+        for p in peak:
+            pid = p[0] + "_" + p[1] + "_" + p[2]
             chr = p[0]
-            size = int(p[2]) - int(p[1])
+            start = int(p[1])
+            end = int(p[2])
             other = '\t'.join(p[3:])
-            depth = np.array([[int(int(x[8]) + int(x[9]) / 2), int(x[10])] for x in
-                              pybedtools.BedTool('\t'.join(p), from_string=True).intersect(bdg, wa=True, wb=True)])
-            maxidx = np.argmax(depth, axis=0)[1]
-            peakpos = depth[maxidx, 0]
-            out.write('\t'.join([chr, str(peakpos - size / 2), str(peakpos + size / 2), other]) + '\n')
+            cov = np.array(coverage[pid])
+            # cov = np.array([[int(x[8]),int(x[9]),int(x[10])] for x in peak_coverage if x[0]+"_"+x[1]+"_"+x[2] == p[0]+"_"+p[1]+"_"+p[2]])
+            if len(cov) == 0:
+                print("[%s] Warning! No Intersect Found for peak: %s" % (timestamp(), p.strip()))
+            else:
+                mat = np.zeros(end - start, dtype=int)
+                for c in cov:
+                    mat[c[0] - start:c[1] - start] = c[2]
+                depth = np.zeros(end - start - windowSize + 1, dtype=int)
+                for idx in range(0, end - start - windowSize + 1):
+                    depth[idx] = sum(mat[idx:idx + windowSize])
+                peakstarts = np.argwhere(depth == np.max(depth))
+                out.write('\t'.join(
+                    [chr, str(peakstarts[0, 0] + start), str(peakstarts[-1, 0] + start + windowSize), other]) + '\n')
