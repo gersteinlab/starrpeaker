@@ -459,6 +459,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0):
     del mat
 
     ### multiple testing correction
+    print("[%s] Multiple testing correction" % (timestamp()))
     _, pval_adj, _, _ = multi.multipletests(pval, method="fdr_bh")
 
     p_score = -np.log10(pval)
@@ -471,19 +472,24 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0):
                 if pval_adj[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
                         bin.strip(), p_score[i], q_score[i], pval[i], pval_adj[i]))
-
-    ### merge peak
-    pybedtools.BedTool(prefix + ".peak.bed").merge(c=[4, 5, 6, 7], o=["max", "max", "min", "min"]).saveas(
-        prefix + ".peak.merged.bed")
-
-    ### center merged peak
-    center_peak(prefix + ".peak.merged.bed", bctFile + ".1.bdg", prefix + ".peak.final.bed")
+    del p_score, q_score
 
     ### output p-val track
+    print("[%s] Generating P-value track" % (timestamp()))
     with open(prefix + ".pval.bedGraph", "w") as out:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
                 out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
+    del pval, pval_adj
+
+    ### merge peak
+    print("[%s] Merge peaks" % (timestamp()))
+    pybedtools.BedTool(prefix + ".peak.bed").merge(c=[4, 5, 6, 7], o=["max", "max", "min", "min"]).saveas(
+        prefix + ".peak.merged.bed")
+
+    ### center merged peak
+    print("[%s] Finalizing peaks" % (timestamp()))
+    center_peak(prefix + ".peak.merged.bed", bctFile + ".1.bdg", prefix + ".peak.final.bed")
 
     print("[%s] Done" % (timestamp()))
 
