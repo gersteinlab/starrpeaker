@@ -472,7 +472,6 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0):
                 if pval_adj[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
                         bin.strip(), p_score[i], q_score[i], pval[i], pval_adj[i]))
-    del p_score, q_score
 
     ### output p-val track
     print("[%s] Generating P-value track" % (timestamp()))
@@ -480,7 +479,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0):
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
                 out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
-    del pval, pval_adj
+    del p_score, q_score, pval, pval_adj
 
     ### merge peak
     print("[%s] Merge peaks" % (timestamp()))
@@ -601,6 +600,8 @@ def center_peak(peakFile, coverageFile, centeredPeakFile, windowSize=500):
             coverage[pid].append([int(pc[8]), int(pc[9]), int(pc[10])])
         else:
             coverage[pid] = [[int(pc[8]), int(pc[9]), int(pc[10])]]
+    del peak_coverage
+
     with open(centeredPeakFile, "w") as out:
         for p in peak:
             pid = p[0] + "_" + p[1] + "_" + p[2]
