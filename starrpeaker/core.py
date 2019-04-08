@@ -615,7 +615,7 @@ def center_peak(peakFile, coverageFile, centeredPeakFile, windowSize=500):
             # cov = np.array([[int(x[8]),int(x[9]),int(x[10])] for x in peak_coverage if x[0]+"_"+x[1]+"_"+x[2] == p[0]+"_"+p[1]+"_"+p[2]])
             if len(cov) == 0:
                 print("[%s] Warning! No Intersect Found for peak: %s" % (timestamp(), '\t'.join(p)))
-            elif (end - start) < windowSize:
+            elif (end - start) < int(windowSize):
                 print("[%s] Warning! Smaller Peak Found: %s" % (timestamp(), '\t'.join(p)))
                 out.write('\t'.join(
                     [chr, str(start), str(end), other]) + '\n')
@@ -623,9 +623,9 @@ def center_peak(peakFile, coverageFile, centeredPeakFile, windowSize=500):
                 mat = np.zeros(end - start, dtype=int)
                 for c in cov:
                     mat[c[0] - start:c[1] - start] = c[2]
-                depth = np.zeros(end - start - windowSize + 1, dtype=int)
-                for idx in range(0, end - start - windowSize + 1):
-                    depth[idx] = sum(mat[idx:idx + windowSize])
+                depth = np.zeros(end - start - int(windowSize) + 1, dtype=int)
+                for idx in range(0, end - start - int(windowSize) + 1):
+                    depth[idx] = sum(mat[idx:idx + int(windowSize)])
                 peakstarts = np.argwhere(depth == np.max(depth))
                 out.write('\t'.join(
-                    [chr, str(peakstarts[0, 0] + start), str(peakstarts[-1, 0] + start + windowSize), other]) + '\n')
+                    [chr, str(peakstarts[0, 0] + start), str(peakstarts[-1, 0] + start + int(windowSize)), other]) + '\n')
