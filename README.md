@@ -1,4 +1,4 @@
-# StarrPeaker
+# STARR-Peaker
 Peak caller for STARR-seq data
 
 ## Dependencies
@@ -25,25 +25,25 @@ starrpeaker -h
 
 *Few notes on how alignment (BAM) files were prepared*
 
-For each biological replicates FASTQ from 
+For each biological replicates in FASTQ format
 
 1. Aligned paired-end reads using BWA mem (v0.7.17)
-2. Filtered alignments using SAMtools (v1.5)
+2. Filtered alignments using SAMtools (v1.5) with the following arguments
 filter: -F 1804 exclude FLAG 1804: unmapped, next segment unmapped, secondary alignments, not passing platform q, PCR or optical duplicates; -f 2 require FLAG 2: properly aligned; -q 30 exclude MAPQ < 30; -u uncompressed output; 
 3. Removed duplicates using picard (v2.9.0)
 4. Merged biological replicates using SAMtools
 
 ## Inputs
 
-* Input alignment (BAM) file
-* Output alignment (BAM) file
+* Input alignment (BAM) file (STARR-seq input)
+* Output alignment (BAM) file (STARR-seq output)
 * Covariates (BigWig) file(s)
 * Chrom Size file (i.e., https://hgdownload-test.gi.ucsc.edu/goldenPath/hg38/bigZips/hg38.chrom.sizes) 
 * Blacklist (BED) file (i.e., https://www.encodeproject.org/files/ENCFF419RSJ/)
 
 ## Covariates
 
-The peak calling algorithm models STARR-seq read counts across the genome using multiple covariates to correct for potential sequencing bias. It is recommended to include potential confounding factors into the model. These includes but not limited to mappability, GC-content, cross-species conservation, and so on.
+The peak calling algorithm models STARR-seq fragment coverage across the genome using multiple covariates to correct for potential sequencing bias. It is recommended to include potential confounding variables into the model. These includes but not limited to GC-content, mappability tracks, and so on.
 
 ## Usage
 
