@@ -22,7 +22,7 @@ parser.add_argument('-o', '--out', help='Output File', required=True)
 
 ### optional args
 parser.add_argument('-l', '--length', help='Bin Length', required=False, default=500)
-parser.add_argument('-s', '--step', help='Step Size', required=False, default=50)
+parser.add_argument('-s', '--step', help='Step Size', required=False, default=100)
 
 args = parser.parse_args()
 

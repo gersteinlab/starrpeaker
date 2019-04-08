@@ -614,9 +614,9 @@ def center_peak(peakFile, coverageFile, centeredPeakFile, windowSize=500):
             cov = np.array(coverage[pid])
             # cov = np.array([[int(x[8]),int(x[9]),int(x[10])] for x in peak_coverage if x[0]+"_"+x[1]+"_"+x[2] == p[0]+"_"+p[1]+"_"+p[2]])
             if len(cov) == 0:
-                print("[%s] Warning! No Intersect Found for peak: %s" % (timestamp(), p.strip()))
+                print("[%s] Warning! No Intersect Found for peak: %s" % (timestamp(), '\t'.join(p)))
             elif (end - start) < windowSize:
-                print("[%s] Warning! Smaller Peak Found: %s" % (timestamp(), p.strip()))
+                print("[%s] Warning! Smaller Peak Found: %s" % (timestamp(), '\t'.join(p)))
                 out.write('\t'.join(
                     [chr, str(start), str(end), other]) + '\n')
             else:
