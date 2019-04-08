@@ -383,7 +383,7 @@ def theta(y, mu, verbose=False):
     return t0, se
 
 
-def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0):
+def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0, binSize=500):
     print("[%s] Calling peaks" % (timestamp()))
 
     ### load data
@@ -488,7 +488,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0):
 
     ### center merged peak
     print("[%s] Finalizing peaks" % (timestamp()))
-    center_peak(prefix + ".peak.merged.bed", bctFile + ".1.bdg", prefix + ".peak.final.bed")
+    center_peak(prefix + ".peak.merged.bed", bctFile + ".1.bdg", prefix + ".peak.final.bed", windowSize=binSize)
 
     print("[%s] Done" % (timestamp()))
 
@@ -602,7 +602,7 @@ def center_peak(peakFile, coverageFile, centeredPeakFile, windowSize=500):
             coverage[pid].append([int(pc[8]), int(pc[9]), int(pc[10])])
         else:
             coverage[pid] = [[int(pc[8]), int(pc[9]), int(pc[10])]]
-    # del peak_coverage
+    del peak_coverage
 
     with open(centeredPeakFile, "w") as out:
         for p in peak:
@@ -615,6 +615,10 @@ def center_peak(peakFile, coverageFile, centeredPeakFile, windowSize=500):
             # cov = np.array([[int(x[8]),int(x[9]),int(x[10])] for x in peak_coverage if x[0]+"_"+x[1]+"_"+x[2] == p[0]+"_"+p[1]+"_"+p[2]])
             if len(cov) == 0:
                 print("[%s] Warning! No Intersect Found for peak: %s" % (timestamp(), p.strip()))
+            elif (end - start) < windowSize:
+                print("[%s] Warning! Smaller Peak Found: %s" % (timestamp(), p.strip()))
+                out.write('\t'.join(
+                    [chr, str(start), str(end), other]) + '\n')
             else:
                 mat = np.zeros(end - start, dtype=int)
                 for c in cov:

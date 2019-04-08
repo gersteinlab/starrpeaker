@@ -64,7 +64,8 @@ def main():
                    bctFile=args.prefix + ".bam.bct",
                    covFile=args.prefix + ".cov.tsv",
                    threshold=args.threshold,
-                   minInputQuantile=args.minquantile)
+                   minInputQuantile=args.minquantile,
+                   binSize=args.length)
 
     ### make signal tracks
     core.make_bigwig(prefix=args.prefix,

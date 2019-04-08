@@ -24,6 +24,7 @@ parser.add_argument('-c', '--cov', help='Covariate File', required=True)
 ### optional args
 parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
 parser.add_argument('-q', '--minquantile', help='Minimum Input Quantile', required=False, default=0.2)
+parser.add_argument('-l', '--length', help='Bin Length', required=False, default=500)
 
 args = parser.parse_args()
 
@@ -32,4 +33,5 @@ if __name__ == "__main__": core.call_peak(prefix=args.prefix,
                                           bctFile=args.bct,
                                           covFile=args.cov,
                                           threshold=args.threshold,
-                                          minInputQuantile=args.minquantile)
+                                          minInputQuantile=args.minquantile,
+                                          binSize=args.length)
