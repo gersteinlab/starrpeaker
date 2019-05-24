@@ -19,12 +19,14 @@ parser = argparse.ArgumentParser(description='Call Peaks')
 parser.add_argument('-p', '--prefix', help='Output File Prefix', required=True)
 parser.add_argument('--bed', help='Bin BED File', required=True)
 parser.add_argument('--bct', help='Bincount BCT File', required=True)
-parser.add_argument('-c', '--cov', help='Covariate File', required=True)
+parser.add_argument('--cov', help='Covariate File', required=True)
+parser.add_argument('--bw', help='STARR-seq Output Coverage BigWig File', required=True)
+parser.add_argument('-c', '--chromsize', help='Chrom Sizes', required=True)
 
 ### optional args
 parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
 parser.add_argument('-q', '--minquantile', help='Minimum Input Quantile', required=False, default=0.2)
-parser.add_argument('-l', '--length', help='Bin Length', required=False, default=500)
+parser.add_argument('-m', '--mode', help='Mode', required=False, default=1)
 
 args = parser.parse_args()
 
@@ -32,6 +34,8 @@ if __name__ == "__main__": core.call_peak(prefix=args.prefix,
                                           bedFile=args.bed,
                                           bctFile=args.bct,
                                           covFile=args.cov,
+                                          bwFile=args.bw,
+                                          chromSize=args.chromsize,
                                           threshold=args.threshold,
                                           minInputQuantile=args.minquantile,
-                                          binSize=args.length)
+                                          mode=args.mode)

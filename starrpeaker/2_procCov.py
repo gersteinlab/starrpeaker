@@ -16,12 +16,13 @@ import core
 parser = argparse.ArgumentParser(description='Process BigWig File(s)')
 
 ### required args
+
+parser.add_argument('-p', '--prefix', help='Output File Prefix', required=True)
 parser.add_argument('-c', '--cov', help='BigWig Files as Covariates', nargs='+', required=True)
 parser.add_argument('-b', '--bed', help='Bin BED File', required=True)
-parser.add_argument('-o', '--out', help='Output File', required=True)
 
 args = parser.parse_args()
 
 if __name__ == "__main__": core.proc_cov(bwFiles=args.cov,
                                          bedFile=args.bed,
-                                         fileOut=args.out)
+                                         fileOut=args.prefix + ".cov.tsv")

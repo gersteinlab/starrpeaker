@@ -63,16 +63,9 @@ def main():
                    bedFile=args.prefix + ".bin.bed",
                    bctFile=args.prefix + ".bam.bct",
                    covFile=args.prefix + ".cov.tsv",
+                   bwFile=args.prefix + ".bam.bct.1.bw",
+                   chromSize=args.chromsize,
                    threshold=args.threshold,
-                   minInputQuantile=args.minquantile,
-                   binSize=args.length)
-
-    ### make signal tracks
-    core.make_bigwig(prefix=args.prefix,
-                     bedFile=args.prefix + ".bin.bed",
-                     bctFile=args.prefix + ".bam.bct",
-                     chromsize=args.chromsize,
-                     bedGraphFile=args.prefix + ".pval.bedGraph")
-
+                   minInputQuantile=args.minquantile)
 
 if __name__ == "__main__": main()

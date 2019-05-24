@@ -16,9 +16,9 @@ import core
 parser = argparse.ArgumentParser(description='Make Bin in BED Format')
 
 ### required args
+parser.add_argument('-p', '--prefix', help='Output File Prefix', required=True)
 parser.add_argument('-c', '--chromsize', help='Chrom Sizes', required=True)
 parser.add_argument('-x', '--blacklist', help='Blacklist Region in BED format', required=True)
-parser.add_argument('-o', '--out', help='Output File', required=True)
 
 ### optional args
 parser.add_argument('-l', '--length', help='Bin Length', required=False, default=500)
@@ -30,4 +30,4 @@ if __name__ == "__main__": core.make_bin(chromSize=args.chromsize,
                                          binLength=args.length,
                                          stepSize=args.step,
                                          blackList=args.blacklist,
-                                         fileOut=args.out)
+                                         fileOut=args.prefix + ".bin.bed")

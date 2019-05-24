@@ -21,6 +21,8 @@ import statsmodels.api as sm
 import statsmodels.stats.multitest as multi
 import os, uuid, datetime
 from itertools import compress
+import subprocess
+import multiprocessing
 
 
 def timestamp():
@@ -221,11 +223,19 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
         mat[:, j] = np.array([int(l.split("\t")[3]) for l in str(readDepth).rstrip("\n").split("\n")])
 
         ### save genome coverage
-        mergedBed.genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + str(j) + ".bdg")
+        print("[%s] Making genome coverage bedGraph" % (timestamp()))
+        binSize = int(a[0][2]) - int(a[0][1])
+        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(
+            fileOut + "." + str(j) + ".bdg")
 
         ### delete tmp merged bed files
         safe_remove("tmp" + uid + str(j) + ".merged.bed")
-        del merged, readDepth
+        del merged, mergedBed, readDepth
+
+        ### convert bedGraph to bigWig
+        print("[%s] Converting bedGraph to bigWig" % (timestamp()))
+        bdg2bw(bdgFile=fileOut + "." + str(j) + ".bdg", bwFile=fileOut + "." + str(j) + ".bw", chromSize=chromSize)
+        safe_remove(fileOut + "." + str(j) + ".bdg")
 
     if normalize:
         ### normalize input count
@@ -236,8 +246,8 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
     else:
         np.savetxt(fileOut, mat, fmt='%i', delimiter="\t")
 
+    del a, mat, tct, normalized_input
     print("[%s] Done" % (timestamp()))
-    del a, mat, tct
 
 
 def proc_bam_readstart(bamFiles, bedFile, chromSize, fileOut, normalize=False, pseudocount=1):
@@ -311,14 +321,23 @@ def proc_bam_readstart(bamFiles, bedFile, chromSize, fileOut, normalize=False, p
                 safe_remove("tmp" + uid + str(j) + chr + "sorted.bed")
 
         print("[%s] Counting depth per bin" % (timestamp()))
-        readDepth = a.coverage(pybedtools.BedTool("tmp" + uid + str(j) + ".merged.bed"), sorted=True, counts=True)
+        mergedBed = pybedtools.BedTool("tmp" + uid + str(j) + ".merged.bed")
+        readDepth = a.coverage(mergedBed, sorted=True, counts=True)
 
         ### extract 4th column, which is read counts, and assign as numpy array
         mat[:, j] = np.array([int(l.split("\t")[3]) for l in str(readDepth).rstrip("\n").split("\n")])
 
+        ### save genome coverage
+        print("[%s] Making genome coverage bedGraph" % (timestamp()))
+        binSize = int(a[0][2]) - int(a[0][1])
+        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(
+            fileOut + "." + str(j) + ".bdg")
+        bdg2bw(fileOut + "." + str(j) + ".bdg", fileOut + "." + str(j) + ".bw", chromSize)
+
         ### delete tmp merged bed files
-        # safe_remove("tmp" + uid + str(j) + ".merged.bed")
-        os.rename("tmp" + uid + str(j) + ".merged.bed", fileOut + "." + str(j) + ".bdg")
+        safe_remove("tmp" + uid + str(j) + ".merged.bed")
+        safe_remove(fileOut + "." + str(j) + ".bdg")
+        del merged, mergedBed, readDepth
 
     if normalize:
         ### normalize input count
@@ -383,22 +402,33 @@ def theta(y, mu, verbose=False):
     return t0, se
 
 
-def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0, binSize=500):
+def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, minInputQuantile=0, mode=1):
+    '''
+
+    Args:
+        prefix: prefix for the output
+        bedFile: bin in BED format
+        bctFile: fragment insert coverage in BCT format (made from procBam.py)
+        covFile: covariates in TSV format
+        bwFile: fragment coverage in BigWig format
+        chromSize: chromosome sizes
+        threshold: threshold to call peak
+        minInputQuantile: minimum input coverage
+
+    Returns:
+        peak files (original peaks, merged peaks, and centered final peaks)
+
+    '''
     print("[%s] Calling peaks" % (timestamp()))
 
     ### load data
-    print("[%s] Loading response, exposure, and covariates" % (timestamp()))
-    bct = np.loadtxt(bctFile, ndmin=2)  # input, output, normalized input
-    cov = np.loadtxt(covFile, ndmin=2)
+    print("[%s] Loading fragment coverages, and covariates" % (timestamp()))
+    bct = np.loadtxt(bctFile, ndmin=2)  # 0=input, 1=output, 2=normalized input
+    cov = np.loadtxt(covFile, ndmin=2)  # 3:=cov
 
     ### merge data
-    mat = np.concatenate((bct[:, 1:], cov), axis=1)  # output, normalized input
+    mat = np.concatenate((bct[:, [1, 0, 2]], cov), axis=1)  # 0=output, 1=input, 2=normalized input, 3:=cov
     del bct, cov
-
-    ### remove bins with normalized input count of zero (i.e., untested region) OR below "minimum threshold" defined by minInputQuantile
-    minInput = np.quantile(mat[(mat[:, 1] > 0), 1], float(minInputQuantile))
-    print("[%s] Minimum Normalized Input Coverage: %f" % (timestamp(), minInput))
-    nonZeroInput = mat[:, 1] > minInput
 
     ### non sliding bins
     nonSliding = np.zeros(mat.shape[0], dtype=bool)  ### initialize with False
@@ -413,49 +443,106 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0, 
                 lastbin = int(bin.split("\t")[2])
                 nonSliding[i] = True
 
-    ### filter inputs with zero
+    ### remove bins with normalized input count of zero (i.e., untested region) OR below "minimum threshold" defined by minInputQuantile
+    minInput = np.quantile(mat[(mat[:, 1] > 0), 1], float(minInputQuantile))
+    print("[%s] Minimum Normalized Input Coverage: %f" % (timestamp(), minInput))
+    nonZeroInput = mat[:, 1] > minInput
+
+    ### calculate fold change
+    fc = np.zeros(mat.shape[0])
+    fc[mat[:, 1] > 0] = mat[mat[:, 1] > 0, 0] / (mat[mat[:, 1] > 0, 2])
+    minFC = fc > 1
+
+    ### filtering bins
+    print("[%s] Before filtering: %s" % (timestamp(), mat.shape[0]))
+
     print("[%s] Removing %i bins with insufficient input coverage" % (timestamp(), sum(np.invert(nonZeroInput))))
+    print("[%s] Bins with sufficient input coverage: %s" % (timestamp(), mat[nonZeroInput, :].shape[0]))
+
     print("[%s] Removing %i sliding bins" % (timestamp(), sum(np.invert(nonSliding))))
+    print("[%s] Bins with non-sliding window: %s" % (timestamp(), mat[nonSliding, :].shape[0]))
 
-    print("[%s] Before filtering: %s" % (timestamp(), mat.shape))
-    print("[%s] Bins with sufficient input coverage: %s" % (timestamp(), mat[nonZeroInput, :].shape))
-    print("[%s] Non sliding bin: %s" % (timestamp(), mat[nonSliding, :].shape))
-    print("[%s] After filtering:: %s" % (timestamp(), mat[nonZeroInput & nonSliding, :].shape))
+    print("[%s] After filtering:: %s" % (timestamp(), mat[nonZeroInput & nonSliding, :].shape[0]))
 
-    ### formula
-    x = ["x" + str(i) for i in range(1, mat.shape[1] - 1)]
-    df = pd.DataFrame(mat[nonZeroInput & nonSliding, :], columns=["y", "exposure"] + x)
-    formula = "y~" + "+".join(df.columns.difference(["y", "exposure"]))
-    print("[%s] Fit using formula: %s" % (timestamp(), formula))
+    ### mode 2 uses "input" as offset variable
+    if int(mode)==2:
+        print("[%s] Running Mode 2" % (timestamp()))
+        ### remove input
+        mat = np.delete(mat, 1, 1)
 
-    ### Initial parameter estimation using Poisson regression
-    print("[%s] Initial estimate" % (timestamp()))
-    model0 = smf.glm(formula, data=df, family=sm.families.Poisson(), offset=np.log(df["exposure"])).fit()
-    # print model0.summary()
+        ### formula
+        x = ["x" + str(i) for i in range(1, mat.shape[1] - 1)]
+        df = pd.DataFrame(mat[nonZeroInput & nonSliding, :], columns=["y", "exposure"] + x)
+        formula = "y~" + "+".join(df.columns.difference(["y", "exposure"]))
+        print("[%s] Fit using formula: %s" % (timestamp(), formula))
 
-    ### Estimate theta
-    th0, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model0.mu)
-    print("[%s] Initial estimate of theta is %f" % (timestamp(), th0))
+        ### Initial parameter estimation using Poisson regression
+        # print("[%s] Initial estimate" % (timestamp()))
+        model0 = smf.glm(formula, data=df, family=sm.families.Poisson(), offset=np.log(df["exposure"])).fit()
+        # print model0.summary()
 
-    ### re-estimate beta with theta
-    print("[%s] Re-estimate of beta" % (timestamp()))
-    model = smf.glm(formula, data=df, family=sm.families.NegativeBinomial(alpha=1 / th0),
-                    offset=np.log(df["exposure"])).fit(start_params=model0.params)
-    # print model.summary()
+        ### Estimate theta
+        th0, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model0.mu)
+        print("[%s] Initial estimate of theta is %f" % (timestamp(), th0))
 
-    ### Re-estimate theta
-    th, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model.mu)
-    print("[%s] Re-estimate of theta is %f" % (timestamp(), th))
+        ### re-estimate beta with theta
+        # print("[%s] Re-estimate of beta" % (timestamp()))
+        model = smf.glm(formula, data=df, family=sm.families.NegativeBinomial(alpha=1 / th0),
+                        offset=np.log(df["exposure"])).fit(start_params=model0.params)
+        # print model.summary()
 
-    ### predict
-    df = pd.DataFrame(mat[nonZeroInput, :], columns=["y", "exposure"] + x)
-    y_hat = model.predict(df, offset=np.log(df["exposure"]))
+        ### Re-estimate theta
+        th, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model.mu)
+        print("[%s] Re-estimate of theta is %f" % (timestamp(), th))
+
+        ### predict
+        print("[%s] Predicting expected counts for bins above a minimum threshold: %s" % (
+            timestamp(), mat[nonZeroInput, :].shape[0]))
+        df = pd.DataFrame(mat[nonZeroInput & minFC, :], columns=["y", "exposure"] + x)
+        y_hat = model.predict(df, offset=np.log(df["exposure"]))
+
+    ### mode 1 uses "input" as covariate:
+    else:
+        print("[%s] Running Mode 1" % (timestamp()))
+        ### remove normalized input
+        mat = np.delete(mat, 2, 1)
+
+        ### formula
+        x = ["x" + str(i) for i in range(1, mat.shape[1])]
+        df = pd.DataFrame(mat[nonZeroInput & nonSliding, :], columns=["y"] + x)
+        formula = "y~" + "+".join(df.columns.difference(["y"]))
+        print("[%s] Fit using formula: %s" % (timestamp(), formula))
+
+        ### Initial parameter estimation using Poisson regression
+        print("[%s] Initial estimate" % (timestamp()))
+        model0 = smf.glm(formula, data=df, family=sm.families.Poisson()).fit()
+        # print model0.summary()
+
+        ### Estimate theta
+        th0, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model0.mu)
+        print("[%s] Initial estimate of theta is %f" % (timestamp(), th0))
+
+        ### re-estimate beta with theta
+        print("[%s] Re-estimate of beta" % (timestamp()))
+        model = smf.glm(formula, data=df, family=sm.families.NegativeBinomial(alpha=1 / th0)).fit(
+            start_params=model0.params)
+        # print model.summary()
+
+        ### Re-estimate theta
+        th, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model.mu)
+        print("[%s] Re-estimate of theta is %f" % (timestamp(), th))
+
+        ### predict
+        print("[%s] Predicting expected counts for bins above a minimum threshold: %s" % (
+            timestamp(), mat[nonZeroInput & minFC, :].shape[0]))
+        df = pd.DataFrame(mat[nonZeroInput & minFC, :], columns=["y"] + x)
+        y_hat = model.predict(df)
 
     ### calculate P-value
     print("[%s] Calculating P-value" % (timestamp()))
     theta_hat = np.repeat(th, len(y_hat))
     prob = th / (th + y_hat)  ### prob=theta/(theta+mu)
-    pval = 1 - nbinom.cdf(mat[nonZeroInput, 0] - 1, n=theta_hat, p=prob)
+    pval = 1 - nbinom.cdf(mat[nonZeroInput & minFC, 0] - 1, n=theta_hat, p=prob)
     del mat
 
     ### multiple testing correction
@@ -468,70 +555,46 @@ def call_peak(prefix, bedFile, bctFile, covFile, threshold, minInputQuantile=0, 
     ### output peak
     with open(prefix + ".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
-            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
+            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & minFC))):
                 if pval_adj[i] <= float(threshold):
-                    out.write("%s\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
-                        bin.strip(), p_score[i], q_score[i], pval[i], pval_adj[i]))
+                    out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
+                        bin.strip(), fc[nonZeroInput & minFC][i], p_score[i], q_score[i], pval[i], pval_adj[i]))
 
     ### output p-val track
-    print("[%s] Generating P-value track" % (timestamp()))
-    with open(prefix + ".pval.bedGraph", "w") as out:
+    print("[%s] Generating P-value bedGraph" % (timestamp()))
+    with open(prefix + ".pval.bdg", "w") as out:
         with open(bedFile, "r") as bed:
-            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput))):
+            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & minFC))):
                 out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
     del p_score, q_score, pval, pval_adj
 
+    ### make bigWig track
+    print("[%s] Making BigWig tracks" % (timestamp()))
+    make_bigwig(prefix=prefix, bedFile=bedFile, bctFile=bctFile, chromSize=chromSize, bedGraphFile=prefix + ".pval.bdg")
+    safe_remove(prefix + ".pval.bdg")
+
     ### merge peak
     print("[%s] Merge peaks" % (timestamp()))
-    pybedtools.BedTool(prefix + ".peak.bed").merge(c=[4, 5, 6, 7], o=["max", "max", "min", "min"]).saveas(
+    pybedtools.BedTool(prefix + ".peak.bed").merge(c=[4, 5, 6, 7, 8], o=["max", "max", "max", "min", "min"]).saveas(
         prefix + ".peak.merged.bed")
 
     ### center merged peak
     print("[%s] Finalizing peaks" % (timestamp()))
-    center_peak(prefix + ".peak.merged.bed", bctFile + ".1.bdg", prefix + ".peak.final.bed", windowSize=binSize)
+    center_peak(bwFile=bwFile,
+                peakFile=prefix + ".peak.merged.bed",
+                centeredPeakFile=prefix + ".peak.final.bed")
 
     print("[%s] Done" % (timestamp()))
 
 
-def make_pval_bigwig(prefix, bedGraphFile, chromsize):
-    print("[%s] Making P-value BigWig Tracks" % (timestamp()))
-    with open(chromsize) as f: cs = [line.strip().split('\t') for line in f.readlines()]
-
-    bin = np.genfromtxt(bedGraphFile, dtype=str)
-
-    starts = np.array(bin[:, 1], dtype=np.int64)
-    ends = np.array(bin[:, 2], dtype=np.int64)
-
-    l = ends[0] - starts[0]
-    s = starts[1] - starts[0]
-    print("[%s] Using fixed interval of %i" % (timestamp(), s))
-
-    nonoverlapping = ends - starts == l
-
-    chroms = (np.array(bin[:, 0]))[nonoverlapping]
-    starts = (np.array(bin[:, 1], dtype=np.int64) + int(l / 2) - int(s / 2))[nonoverlapping]
-    ends = (np.array(bin[:, 2], dtype=np.int64) - int(l / 2) + int(s / 2))[nonoverlapping]
-    val_pval = np.array(bin[:, 3], dtype=np.float64)[nonoverlapping]
-
-    ### pval signal
-
-    bw = pyBigWig.open(prefix + ".pval.bw", "w")
-    bw.addHeader([(str(x[0]), int(x[1])) for x in cs])
-    bw.addEntries(chroms=chroms, starts=starts, ends=ends, values=val_pval)
-    bw.close()
-
-    print("[%s] Done" % (timestamp()))
-
-
-def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
-    print("[%s] Making BigWig Tracks" % (timestamp()))
-    with open(chromsize) as f: cs = [line.strip().split('\t') for line in f.readlines()]
+def make_bigwig(prefix, bedFile, bctFile, chromSize, bedGraphFile=""):
+    with open(chromSize) as f: cs = [line.strip().split('\t') for line in f.readlines()]
 
     bin = np.genfromtxt(bedFile, dtype=str)
-    bct = np.loadtxt(bctFile, dtype=np.float64, ndmin=2)
+    bct = np.loadtxt(bctFile, dtype=np.float32, ndmin=2)
 
-    starts = np.array(bin[:, 1], dtype=np.int64)
-    ends = np.array(bin[:, 2], dtype=np.int64)
+    starts = np.array(bin[:, 1], dtype=np.int32)
+    ends = np.array(bin[:, 2], dtype=np.int32)
 
     l = ends[0] - starts[0]
     s = starts[1] - starts[0]
@@ -540,11 +603,11 @@ def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
     nonoverlapping = ends - starts == l
 
     chroms = (np.array(bin[:, 0]))[nonoverlapping]
-    starts = (np.array(bin[:, 1], dtype=np.int64) + int(l / 2) - int(s / 2))[nonoverlapping]
-    ends = (np.array(bin[:, 2], dtype=np.int64) - int(l / 2) + int(s / 2))[nonoverlapping]
-    val_input = np.array(bct[:, 0], dtype=np.float64)[nonoverlapping]
-    val_output = np.array(bct[:, 1], dtype=np.float64)[nonoverlapping]
-    val_normalized_input = np.array(bct[:, 2], dtype=np.float64)[nonoverlapping]
+    starts = (np.array(bin[:, 1], dtype=np.int32) + int(l / 2) - int(s / 2))[nonoverlapping]
+    ends = (np.array(bin[:, 2], dtype=np.int32) - int(l / 2) + int(s / 2))[nonoverlapping]
+    val_input = np.array(bct[:, 0], dtype=np.float32)[nonoverlapping]
+    val_output = np.array(bct[:, 1], dtype=np.float32)[nonoverlapping]
+    val_normalized_input = np.array(bct[:, 2], dtype=np.float32)[nonoverlapping]
 
     chroms_fc = chroms[np.nonzero(val_normalized_input)]
     starts_fc = starts[np.nonzero(val_normalized_input)]
@@ -584,48 +647,172 @@ def make_bigwig(prefix, bedFile, bctFile, chromsize, bedGraphFile=""):
     #     for x in zip(chroms,starts,ends,val_input):
     #         b.write('\t'.join(map(str,x))+'\n')
 
-    print("[%s] Done" % (timestamp()))
-
     if bedGraphFile != "":
-        make_pval_bigwig(prefix, bedGraphFile, chromsize)
+        print("[%s] Making P-value BigWig track" % (timestamp()))
+
+        bin = np.genfromtxt(bedGraphFile, dtype=str)
+        starts = np.array(bin[:, 1], dtype=np.int32)
+        ends = np.array(bin[:, 2], dtype=np.int32)
+
+        nonoverlapping = ends - starts == l
+
+        chroms = (np.array(bin[:, 0]))[nonoverlapping]
+        starts = (np.array(bin[:, 1], dtype=np.int32) + int(l / 2) - int(s / 2))[nonoverlapping]
+        ends = (np.array(bin[:, 2], dtype=np.int32) - int(l / 2) + int(s / 2))[nonoverlapping]
+        val_pval = np.array(bin[:, 3], dtype=np.float32)[nonoverlapping]
+
+        ### pval signal
+
+        bw4 = pyBigWig.open(prefix + ".pval.bw", "w")
+        bw4.addHeader([(str(x[0]), int(x[1])) for x in cs])
+        bw4.addEntries(chroms=chroms, starts=starts, ends=ends, values=val_pval)
+        bw4.close()
 
 
-def center_peak(peakFile, coverageFile, centeredPeakFile, windowSize=500):
+def bdg2bw(bdgFile, bwFile, chromSize):
+    with open(chromSize) as f: cs = [line.strip().split('\t') for line in f.readlines()]
+
+    bw = pyBigWig.open(bwFile, "w")
+    bw.addHeader([(str(x[0]), int(x[1])) for x in cs])
+
+    with open(bdgFile, "r") as bdg:
+        for line in bdg:
+            chr, start, end, val = line.strip().split("\t")
+            bw.addEntries(chroms=[chr], starts=[int(start)], ends=[int(end)], values=[float(val)])
+
+    bw.close()
+
+
+def center_peak(bwFile, peakFile, centeredPeakFile):
+    bw = pyBigWig.open(bwFile)
     peak = pybedtools.BedTool(peakFile)
-    bdg = pybedtools.BedTool(coverageFile).intersect(peak)
-    peak_coverage = peak.intersect(bdg, wa=True, wb=True)
-
-    coverage = {}
-    for pc in peak_coverage:
-        pid = pc[0] + "_" + pc[1] + "_" + pc[2]
-        if pid in coverage:
-            coverage[pid].append([int(pc[8]), int(pc[9]), int(pc[10])])
-        else:
-            coverage[pid] = [[int(pc[8]), int(pc[9]), int(pc[10])]]
-    del peak_coverage
 
     with open(centeredPeakFile, "w") as out:
         for p in peak:
-            pid = p[0] + "_" + p[1] + "_" + p[2]
             chr = p[0]
             start = int(p[1])
             end = int(p[2])
+            radius = int((end - start) / 2)
             other = '\t'.join(p[3:])
-            cov = np.array(coverage[pid])
-            # cov = np.array([[int(x[8]),int(x[9]),int(x[10])] for x in peak_coverage if x[0]+"_"+x[1]+"_"+x[2] == p[0]+"_"+p[1]+"_"+p[2]])
-            if len(cov) == 0:
+
+            # find output coverage for peak
+            interval = bw.intervals(chr, start, end)
+
+            if len(interval) == 0:
                 print("[%s] Warning! No Intersect Found for peak: %s" % (timestamp(), '\t'.join(p)))
-            elif (end - start) < int(windowSize):
-                print("[%s] Warning! Smaller Peak Found: %s" % (timestamp(), '\t'.join(p)))
-                out.write('\t'.join(
-                    [chr, str(start), str(end), other]) + '\n')
+                out.write('\t'.join([chr, str(start), str(end), other]) + '\n')
+            # elif (end - start) < int(windowSize):
+            #     print("[%s] Warning! Smaller Peak Found: %s" % (timestamp(), '\t'.join(p)))
             else:
-                mat = np.zeros(end - start, dtype=int)
-                for c in cov:
-                    mat[c[0] - start:c[1] - start] = c[2]
-                depth = np.zeros(end - start - int(windowSize) + 1, dtype=int)
-                for idx in range(0, end - start - int(windowSize) + 1):
-                    depth[idx] = sum(mat[idx:idx + int(windowSize)])
-                peakstarts = np.argwhere(depth == np.max(depth))
+                cov = np.array(interval, dtype=int)
+                summit = cov[np.nonzero(cov[:, 2] == np.max(cov[:, 2]))]
+                center = int((summit[0, 0] + summit[-1, 1]) / 2)
                 out.write('\t'.join(
-                    [chr, str(peakstarts[0, 0] + start), str(peakstarts[-1, 0] + start + int(windowSize)), other]) + '\n')
+                    [chr, str(center - radius), str(center + radius), other]) + '\n')
+
+
+def proc_fenergy(bedFile, fileOut, linearfold, genome):
+    print("[%s] Calculate Folding Free Energy per bin" % (timestamp()))
+
+    ### random unique ID
+    uid = get_uid()
+
+    # chr_seq=split_bed(bedFile,uid)
+    nrow = 10000
+    part_list = []
+
+    ### split BED file
+    with open(bedFile, 'r') as bin:
+        part, part_num = None, 0
+        for idx, line in enumerate(bin.readlines()):
+            if idx % nrow == 0:
+                if part:
+                    part.close()
+                part_num += 1
+                part = open("tmp" + uid + "_" + str(part_num) + ".bed", 'w')
+                part_list.append(part_num)
+            part.write(line)
+        if part:
+            part.close()
+
+    ### make arg for parallel computing
+    prefixes = []
+    for part_num in part_list:
+        prefixes.append(["tmp" + uid + "_" + str(part_num), linearfold, genome])
+
+    ### parallel compute linearfold
+    print("[%s] Parallel computing using %i cores" % (timestamp(), multiprocessing.cpu_count()))
+    pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+    pool.map(run_linearfold, prefixes)
+    pool.terminate()
+
+    ### merge bed
+    print("[%s] Merging files" % (timestamp()))
+    safe_remove(fileOut)
+    with open(fileOut, "a") as merged:
+        for part_num in part_list:
+
+            ### merge tmp bed files
+            with open("tmp" + uid + "_" + str(part_num) + ".out", "r") as t:
+                if t.read(1).strip():
+                    t.seek(0)
+                    merged.write(t.read())
+
+            ### delete tmp bed files
+            safe_remove("tmp" + uid + "_" + str(part_num) + ".out")
+
+
+def run_linearfold(arg):
+    '''
+
+    Args:
+        list of arguments
+        [fasta, path2linearfold, genome]
+
+    Returns:
+        NA
+
+    '''
+    pybedtools.BedTool(arg[0] + ".bed").sequence(fi=arg[2]).save_seqs(arg[0] + ".fa")
+    safe_remove(arg[0] + ".bed")
+    with open(arg[0] + ".fa", 'r') as fa:
+        out = subprocess.check_output([arg[1], "-V"], stdin=fa)
+    with open(arg[0] + ".out", 'w') as fo:
+        for line in out.split("\n"):
+            line_split = line.strip().split(" ")
+            if len(line_split) > 1:
+                fo.write(line_split[1].replace("(", "").replace(")", "") + "\n")
+    safe_remove(arg[0] + ".fa")
+
+
+def split_bed(bedFile, uid):
+    '''
+    split BED file by chromosomes
+
+    Args:
+        bedFile: input BED file
+        uid: random unique idenfifier
+
+    Returns:
+        list of chromosomes
+
+    '''
+    chr = ""
+    chr_list = []
+    part = None
+    with open(bedFile, 'r') as bin:
+        for line in bin.readlines():
+            line_split = line.strip().split('\t')
+
+            if line_split[0] == chr:
+                part.write(line)
+            else:
+                if part:
+                    part.close()
+                chr = line_split[0]
+                chr_list.append(chr)
+                part = open("tmp" + uid + chr + ".bed", 'w')
+                part.write(line)
+        if part:
+            part.close()
+    return chr_list
