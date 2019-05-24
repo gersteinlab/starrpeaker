@@ -31,6 +31,7 @@ parser.add_argument('--max', help='Maximum Template Size', required=False, defau
 parser.add_argument('-t', '--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
 parser.add_argument('--pseudocount', help='Pseudocount for Input Normalization', required=False, default=1)
 parser.add_argument('-q', '--minquantile', help='Minimum Input Quantile', required=False, default=0.2)
+parser.add_argument('-m', '--mode', help='Mode', required=False, default=1)
 
 args = parser.parse_args()
 
@@ -66,6 +67,7 @@ def main():
                    bwFile=args.prefix + ".bam.bct.1.bw",
                    chromSize=args.chromsize,
                    threshold=args.threshold,
-                   minInputQuantile=args.minquantile)
+                   minInputQuantile=args.minquantile,
+                   mode=args.mode)
 
 if __name__ == "__main__": main()
