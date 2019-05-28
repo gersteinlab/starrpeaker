@@ -240,8 +240,8 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
     if normalize:
         ### normalize input count
         normalized_input = mat[:, 0] * (tct[1] / tct[0])
-        nonzero = normalized_input != 0
-        normalized_input[nonzero] += float(pseudocount)
+        # nonzero = normalized_input != 0
+        # normalized_input[nonzero] += float(pseudocount)
         np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%.5f', delimiter="\t")
     else:
         np.savetxt(fileOut, mat, fmt='%i', delimiter="\t")
@@ -462,10 +462,10 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     print("[%s] Removing %i sliding bins" % (timestamp(), sum(np.invert(nonSliding))))
     print("[%s] Bins with non-sliding window: %s" % (timestamp(), mat[nonSliding, :].shape[0]))
 
-    print("[%s] After filtering:: %s" % (timestamp(), mat[nonZeroInput & nonSliding, :].shape[0]))
+    print("[%s] After filtering: %s" % (timestamp(), mat[nonZeroInput & nonSliding, :].shape[0]))
 
     ### mode 2 uses "input" as offset variable
-    if int(mode)==2:
+    if int(mode) == 2:
         print("[%s] Running Mode 2" % (timestamp()))
         ### remove input
         mat = np.delete(mat, 1, 1)
