@@ -402,7 +402,7 @@ def theta(y, mu, verbose=False):
     return t0, se
 
 
-def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, minInputQuantile=0, mode=1):
+def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, minInputQuantile, mode=1):
     '''
 
     Args:
