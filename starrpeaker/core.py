@@ -23,6 +23,7 @@ import os, uuid, datetime
 from itertools import compress
 import subprocess
 import multiprocessing
+from sklearn import preprocessing
 
 
 def timestamp():
@@ -426,9 +427,12 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     bct = np.loadtxt(bctFile, ndmin=2)  # 0=input, 1=output, 2=normalized input
     cov = np.loadtxt(covFile, ndmin=2)  # 3:=cov
 
+    ### scale covariates to have mean 0 and sd 1
+    cov_scaled = preprocessing.scale(cov,axis=0)
+
     ### merge data
-    mat = np.concatenate((bct[:, [1, 0, 2]], cov), axis=1)  # 0=output, 1=input, 2=normalized input, 3:=cov
-    del bct, cov
+    mat = np.concatenate((bct[:, [1, 0, 2]], cov_scaled), axis=1)  # 0=output, 1=input, 2=normalized input, 3:=cov
+    del bct, cov, cov_scaled
 
     ### non sliding bins
     nonSliding = np.zeros(mat.shape[0], dtype=bool)  ### initialize with False
@@ -514,7 +518,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         print("[%s] Fit using formula: %s" % (timestamp(), formula))
 
         ### Initial parameter estimation using Poisson regression
-        print("[%s] Initial estimate" % (timestamp()))
+        # print("[%s] Initial estimate" % (timestamp()))
         model0 = smf.glm(formula, data=df, family=sm.families.Poisson()).fit()
         # print model0.summary()
 
@@ -523,7 +527,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         print("[%s] Initial estimate of theta is %f" % (timestamp(), th0))
 
         ### re-estimate beta with theta
-        print("[%s] Re-estimate of beta" % (timestamp()))
+        # print("[%s] Re-estimate of beta" % (timestamp()))
         model = smf.glm(formula, data=df, family=sm.families.NegativeBinomial(alpha=1 / th0)).fit(
             start_params=model0.params)
         # print model.summary()
