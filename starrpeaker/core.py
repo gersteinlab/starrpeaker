@@ -448,8 +448,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
                 nonSliding[i] = True
 
     ### remove bins with normalized input count of zero (i.e., untested region) OR below "minimum threshold" defined by minInputQuantile
-    # minInput = np.quantile(mat[(mat[:, 1] > 0), 1], float(minInputQuantile))
-    minInput = 5
+    minInput = np.quantile(mat[(mat[:, 1] > 0), 1], float(minInputQuantile))
     print("[%s] Minimum Input Coverage: %f" % (timestamp(), minInput))
     nonZeroInput = mat[:, 1] > minInput
 
