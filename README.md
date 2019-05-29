@@ -11,6 +11,7 @@ Peak caller for STARR-seq data
 * scipy
 * pandas
 * statsmodels
+* sklearn (tested on 0.20.3)
 
 ## installation
 
