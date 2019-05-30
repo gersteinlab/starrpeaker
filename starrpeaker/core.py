@@ -428,7 +428,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     cov = np.loadtxt(covFile, ndmin=2)  # 3:=cov
 
     ### scale covariates to have mean 0 and sd 1
-    cov_scaled = preprocessing.scale(cov,axis=0)
+    cov_scaled = preprocessing.scale(cov, axis=0)
 
     ### merge data
     mat = np.concatenate((bct[:, [1, 0, 2]], cov_scaled), axis=1)  # 0=output, 1=input, 2=normalized input, 3:=cov
@@ -674,15 +674,19 @@ def make_bigwig(prefix, bedFile, bctFile, chromSize, bedGraphFile=""):
 
 
 def bdg2bw(bdgFile, bwFile, chromSize):
-    with open(chromSize) as f: cs = [line.strip().split('\t') for line in f.readlines()]
+    with open(chromSize) as f:
+        cs = [line.strip().split('\t') for line in f.readlines()]
 
     bw = pyBigWig.open(bwFile, "w")
     bw.addHeader([(str(x[0]), int(x[1])) for x in cs])
 
     with open(bdgFile, "r") as bdg:
         for line in bdg:
-            chr, start, end, val = line.strip().split("\t")
-            bw.addEntries(chroms=[chr], starts=[int(start)], ends=[int(end)], values=[float(val)])
+            if len(line.strip().split("\t")) == 4:
+                chr, start, end, val = line.strip().split("\t")
+                bw.addEntries(chroms=[chr], starts=[int(start)], ends=[int(end)], values=[float(val)])
+            else:
+                print("[%s] Warning: skipping bedGraph entry: %s" % (timestamp(), line.strip()))
 
     bw.close()
 
