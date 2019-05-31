@@ -447,10 +447,15 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
                 lastbin = int(bin.split("\t")[2])
                 nonSliding[i] = True
 
+    ### remove bins with input count of zero (i.e., untested region) OR extreme values (top and bottom 1%) which can cause issues with least square estimation
+    minInput = np.quantile(mat[(mat[:, 1] > 0), 1], 0.01)
+    maxInput = np.quantile(mat[(mat[:, 1] > 0), 1], 0.99)
+    nonZeroInput = (mat[:, 1] > minInput) & (mat[:, 1] < maxInput)
+
     ### remove bins with normalized input count of zero (i.e., untested region) OR below "minimum threshold" defined by minInputQuantile
-    minInput = np.quantile(mat[(mat[:, 1] > 0), 1], float(minInputQuantile))
-    print("[%s] Minimum Input Coverage: %f" % (timestamp(), minInput))
-    nonZeroInput = mat[:, 1] > minInput
+    # minInput = np.quantile(mat[(mat[:, 1] > 0), 1], float(minInputQuantile))
+    # print("[%s] Minimum Input Coverage: %f" % (timestamp(), minInput))
+    # nonZeroInput = mat[:, 1] > minInput
 
     ### calculate fold change
     fc = np.zeros(mat.shape[0])
