@@ -447,10 +447,16 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
                 lastbin = int(bin.split("\t")[2])
                 nonSliding[i] = True
 
-    ### remove bins with input count of zero (i.e., untested region) OR extreme values (top and bottom 1%) which can cause issues with least square estimation
-    minInput = np.quantile(mat[(mat[:, 1] > 0), 1], 0.01)
-    maxInput = np.quantile(mat[(mat[:, 1] > 0), 1], 0.99)
+    ### remove bins with input count of zero (i.e., untested region) OR extreme values (top 1%, i.e., sequencing artifacts)
+    # minInput = np.quantile(mat[(mat[:, 1] > 0), 1], 0.01)
+    # maxInput = np.quantile(mat[(mat[:, 1] > 0), 1], 0.99)
+    minInput = 0
+    maxInput = np.quantile(mat[:, 1], 0.99)
     nonZeroInput = (mat[:, 1] > minInput) & (mat[:, 1] < maxInput)
+
+    # minOutput = np.quantile(mat[:, 0], 0.01)
+    # maxOutput = np.quantile(mat[:, 0], 0.99)
+    # nonZeroInput = (mat[:, 1] > 0) & (mat[:, 0] > minOutput) & (mat[:, 0] < maxOutput)
 
     ### remove bins with normalized input count of zero (i.e., untested region) OR below "minimum threshold" defined by minInputQuantile
     # minInput = np.quantile(mat[(mat[:, 1] > 0), 1], float(minInputQuantile))
@@ -460,7 +466,10 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     ### calculate fold change
     fc = np.zeros(mat.shape[0])
     fc[mat[:, 1] > 0] = mat[mat[:, 1] > 0, 0] / (mat[mat[:, 1] > 0, 2])
-    minFC = fc > 1
+
+    minOutputThreshold=0.9
+    testOutput = mat[:, 0] > np.quantile(mat[:, 0], float(minOutputThreshold))
+    # minFC = fc > 1
 
     ### filtering bins
     print("[%s] Before filtering: %s" % (timestamp(), mat.shape[0]))
@@ -506,8 +515,8 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
         ### predict
         print("[%s] Predicting expected counts for bins above a minimum threshold: %s" % (
-            timestamp(), mat[nonZeroInput, :].shape[0]))
-        df = pd.DataFrame(mat[nonZeroInput & minFC, :], columns=["y", "exposure"] + x)
+            timestamp(), mat[nonZeroInput & testOutput, :].shape[0]))
+        df = pd.DataFrame(mat[nonZeroInput & testOutput, :], columns=["y", "exposure"] + x)
         y_hat = model.predict(df, offset=np.log(df["exposure"]))
 
     ### mode 1 uses "input" as covariate:
@@ -543,15 +552,15 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
         ### predict
         print("[%s] Predicting expected counts for bins above a minimum threshold: %s" % (
-            timestamp(), mat[nonZeroInput & minFC, :].shape[0]))
-        df = pd.DataFrame(mat[nonZeroInput & minFC, :], columns=["y"] + x)
+            timestamp(), mat[nonZeroInput & testOutput, :].shape[0]))
+        df = pd.DataFrame(mat[nonZeroInput & testOutput, :], columns=["y"] + x)
         y_hat = model.predict(df)
 
     ### calculate P-value
     print("[%s] Calculating P-value" % (timestamp()))
     theta_hat = np.repeat(th, len(y_hat))
     prob = th / (th + y_hat)  ### prob=theta/(theta+mu)
-    pval = 1 - nbinom.cdf(mat[nonZeroInput & minFC, 0] - 1, n=theta_hat, p=prob)
+    pval = 1 - nbinom.cdf(mat[nonZeroInput & testOutput, 0] - 1, n=theta_hat, p=prob)
     del mat
 
     ### multiple testing correction
@@ -564,16 +573,16 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     ### output peak
     with open(prefix + ".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
-            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & minFC))):
+            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & testOutput))):
                 if pval_adj[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
-                        bin.strip(), fc[nonZeroInput & minFC][i], p_score[i], q_score[i], pval[i], pval_adj[i]))
+                        bin.strip(), fc[nonZeroInput & testOutput][i], p_score[i], q_score[i], pval[i], pval_adj[i]))
 
     ### output p-val track
     print("[%s] Generating P-value bedGraph" % (timestamp()))
     with open(prefix + ".pval.bdg", "w") as out:
         with open(bedFile, "r") as bed:
-            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & minFC))):
+            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & testOutput))):
                 out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
     del p_score, q_score, pval, pval_adj
 
