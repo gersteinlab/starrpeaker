@@ -519,7 +519,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         df = pd.DataFrame(mat[nonZeroInput & testOutput, :], columns=["y", "exposure"] + x)
         y_hat = model.predict(df, offset=np.log(df["exposure"]))
 
-    ### mode 1 uses "input" as covariate:
+    ### mode 1 uses "input" as covariate (default):
     else:
         print("[%s] Running Mode 1" % (timestamp()))
         ### remove normalized input
@@ -574,7 +574,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     with open(prefix + ".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & testOutput))):
-                if pval_adj[i] <= float(threshold):
+                if pval[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
                         bin.strip(), fc[nonZeroInput & testOutput][i], p_score[i], q_score[i], pval[i], pval_adj[i]))
 
