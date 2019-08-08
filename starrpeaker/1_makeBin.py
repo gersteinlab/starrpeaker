@@ -16,13 +16,13 @@ import core
 parser = argparse.ArgumentParser(description='Make Bin in BED Format')
 
 ### required args
-parser.add_argument('-p', '--prefix', help='Output File Prefix', required=True)
-parser.add_argument('-c', '--chromsize', help='Chrom Sizes', required=True)
-parser.add_argument('-x', '--blacklist', help='Blacklist Region in BED format', required=True)
+parser.add_argument('--prefix', help='Output File Prefix', required=True)
+parser.add_argument('--chromsize', help='Chrom Sizes', required=True)
+parser.add_argument('--blacklist', help='Blacklist Region in BED format', required=True)
 
 ### optional args
-parser.add_argument('-l', '--length', help='Bin Length', required=False, default=500)
-parser.add_argument('-s', '--step', help='Step Size', required=False, default=100)
+parser.add_argument('--length', help='Bin Length', required=False, default=500)
+parser.add_argument('--step', help='Step Size', required=False, default=100)
 
 args = parser.parse_args()
 

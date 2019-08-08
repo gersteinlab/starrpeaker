@@ -244,7 +244,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize):
     print("[%s] Done" % (timestamp()))
 
 
-def proc_bam_readstart(bamFiles, bedFile, chromSize, fileOut, normalize=False, pseudocount=1):
+def proc_bam_readstart(bamFiles, bedFile, chromSize, fileOut):
     print("[%s] Counting template depth per bin %s" % (timestamp(), bedFile))
 
     ### initialize numpy array
@@ -333,14 +333,9 @@ def proc_bam_readstart(bamFiles, bedFile, chromSize, fileOut, normalize=False, p
         safe_remove(fileOut + "." + str(j) + ".bdg")
         del merged, mergedBed, readDepth
 
-    if normalize:
-        ### normalize input count
-        normalized_input = mat[:, 0] * (tct[1] / tct[0])
-        nonzero = normalized_input != 0
-        normalized_input[nonzero] += float(pseudocount)
-        np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%.5f', delimiter="\t")
-    else:
-        np.savetxt(fileOut, mat, fmt='%i', delimiter="\t")
+    ### normalize input count
+    normalized_input = mat[:, 0] * (tct[1] / tct[0])
+    np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%.5f', delimiter="\t")
 
     print("[%s] Done" % (timestamp()))
     del a, mat, tct
@@ -396,7 +391,7 @@ def theta(y, mu, verbose=False):
     return t0, se
 
 
-def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, minInputQuantile, mode=1):
+def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, mode=1):
     '''
 
     Args:
@@ -440,29 +435,15 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
                 lastbin = int(bin.split("\t")[2])
                 nonSliding[i] = True
 
-    ### remove bins with input count of zero (i.e., untested region) OR extreme values (top 1%, i.e., sequencing artifacts)
-    # minInput = np.quantile(mat[(mat[:, 1] > 0), 1], 0.01)
-    # maxInput = np.quantile(mat[(mat[:, 1] > 0), 1], 0.99)
+    ### remove bins with input (and output) count of zero (i.e., untested region) OR extreme values (top 1%, i.e., sequencing artifacts)
     minInput = 0
     maxInput = np.quantile(mat[:, 1], 0.99)
     nonZeroInput = (mat[:, 1] > minInput) & (mat[:, 1] < maxInput)
-
-    # minOutput = np.quantile(mat[:, 0], 0.01)
-    # maxOutput = np.quantile(mat[:, 0], 0.99)
-    # nonZeroInput = (mat[:, 1] > 0) & (mat[:, 0] > minOutput) & (mat[:, 0] < maxOutput)
-
-    ### remove bins with normalized input count of zero (i.e., untested region) OR below "minimum threshold" defined by minInputQuantile
-    # minInput = np.quantile(mat[(mat[:, 1] > 0), 1], float(minInputQuantile))
-    # print("[%s] Minimum Input Coverage: %f" % (timestamp(), minInput))
-    # nonZeroInput = mat[:, 1] > minInput
+    nonZeroOutput = (mat[:, 0] > 0)
 
     ### calculate fold change
     fc = np.zeros(mat.shape[0])
     fc[mat[:, 1] > 0] = mat[mat[:, 1] > 0, 0] / (mat[mat[:, 1] > 0, 2])
-
-    minOutputThreshold=0.9
-    testOutput = mat[:, 0] > np.quantile(mat[:, 0], float(minOutputThreshold))
-    # minFC = fc > 1
 
     ### filtering bins
     print("[%s] Before filtering: %s" % (timestamp(), mat.shape[0]))
@@ -508,8 +489,8 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
         ### predict
         print("[%s] Predicting expected counts for bins above a minimum threshold: %s" % (
-            timestamp(), mat[nonZeroInput & testOutput, :].shape[0]))
-        df = pd.DataFrame(mat[nonZeroInput & testOutput, :], columns=["y", "exposure"] + x)
+            timestamp(), mat[nonZeroInput & nonZeroOutput, :].shape[0]))
+        df = pd.DataFrame(mat[nonZeroInput & nonZeroOutput, :], columns=["y", "exposure"] + x)
         y_hat = model.predict(df, offset=np.log(df["exposure"]))
 
     ### mode 1 uses "input" as covariate (default):
@@ -545,15 +526,15 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
         ### predict
         print("[%s] Predicting expected counts for bins above a minimum threshold: %s" % (
-            timestamp(), mat[nonZeroInput & testOutput, :].shape[0]))
-        df = pd.DataFrame(mat[nonZeroInput & testOutput, :], columns=["y"] + x)
+            timestamp(), mat[nonZeroInput & nonZeroOutput, :].shape[0]))
+        df = pd.DataFrame(mat[nonZeroInput & nonZeroOutput, :], columns=["y"] + x)
         y_hat = model.predict(df)
 
     ### calculate P-value
     print("[%s] Calculating P-value" % (timestamp()))
     theta_hat = np.repeat(th, len(y_hat))
     prob = th / (th + y_hat)  ### prob=theta/(theta+mu)
-    pval = 1 - nbinom.cdf(mat[nonZeroInput & testOutput, 0] - 1, n=theta_hat, p=prob)
+    pval = 1 - nbinom.cdf(mat[nonZeroInput & nonZeroOutput, 0] - 1, n=theta_hat, p=prob)
     del mat
 
     ### multiple testing correction
@@ -566,16 +547,16 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     ### output peak
     with open(prefix + ".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
-            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & testOutput))):
+            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & nonZeroOutput))):
                 if pval[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
-                        bin.strip(), fc[nonZeroInput & testOutput][i], p_score[i], q_score[i], pval[i], pval_adj[i]))
+                        bin.strip(), fc[nonZeroInput & nonZeroOutput][i], p_score[i], q_score[i], pval[i], pval_adj[i]))
 
     ### output p-val track
     print("[%s] Generating P-value bedGraph" % (timestamp()))
     with open(prefix + ".pval.bdg", "w") as out:
         with open(bedFile, "r") as bed:
-            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & testOutput))):
+            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & nonZeroOutput))):
                 out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
     del p_score, q_score, pval, pval_adj
 
