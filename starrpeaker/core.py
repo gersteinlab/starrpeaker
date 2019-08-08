@@ -115,7 +115,7 @@ def count_total_proper_templates(bam, minSize, maxSize):
     return proper_template_count
 
 
-def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=False, pseudocount=1):
+def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize):
     '''
 
     Args:
@@ -125,8 +125,6 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
         fileOut: output file
         minSize: minimum size of fragment insert to consider
         maxSize: maximum size of fragment insert to consider
-        normalize: if True, normalized input count is added to additional column
-        pseudocount: pseudocount for input normalization
 
     Returns:
         writes bin count output file
@@ -238,14 +236,9 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, normalize=
         bdg2bw(bdgFile=fileOut + "." + str(j) + ".bdg", bwFile=fileOut + "." + str(j) + ".bw", chromSize=chromSize)
         safe_remove(fileOut + "." + str(j) + ".bdg")
 
-    if normalize:
-        ### normalize input count
-        normalized_input = mat[:, 0] * (tct[1] / tct[0])
-        # nonzero = normalized_input != 0
-        # normalized_input[nonzero] += float(pseudocount)
-        np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%.5f', delimiter="\t")
-    else:
-        np.savetxt(fileOut, mat, fmt='%i', delimiter="\t")
+    ### normalize input count, normalized input count is added to additional column
+    normalized_input = mat[:, 0] * (tct[1] / tct[0])
+    np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%.5f', delimiter="\t")
 
     del a, mat, tct, normalized_input
     print("[%s] Done" % (timestamp()))
