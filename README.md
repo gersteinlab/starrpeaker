@@ -1,4 +1,4 @@
-# STARR-Peaker
+# STARRPeaker
 Peak caller for STARR-seq data
 
 ## Dependencies
