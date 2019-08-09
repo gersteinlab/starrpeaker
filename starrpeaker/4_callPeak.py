@@ -21,7 +21,6 @@ parser.add_argument('--chromsize', help='Chrom Sizes', required=True)
 
 ### optional args
 parser.add_argument('--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
-parser.add_argument('--minquantile', help='Minimum Input Quantile', required=False, default=0.2)
 parser.add_argument('--mode', help='Mode', required=False, default=1)
 
 args = parser.parse_args()
@@ -33,5 +32,4 @@ if __name__ == "__main__": core.call_peak(prefix=args.prefix,
                                           bwFile=args.prefix + ".bam.bct.1.bw",
                                           chromSize=args.chromsize,
                                           threshold=args.threshold,
-                                          minInputQuantile=args.minquantile,
                                           mode=args.mode)

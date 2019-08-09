@@ -64,7 +64,6 @@ def main():
                    bwFile=args.prefix + ".bam.bct.1.bw",
                    chromSize=args.chromsize,
                    threshold=args.threshold,
-                   minInputQuantile=args.minquantile,
                    mode=args.mode)
 
 if __name__ == "__main__": main()

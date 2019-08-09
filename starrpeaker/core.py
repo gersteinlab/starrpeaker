@@ -391,7 +391,7 @@ def theta(y, mu, verbose=False):
     return t0, se
 
 
-def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, mode=1):
+def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, mode):
     '''
 
     Args:
@@ -402,7 +402,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         bwFile: fragment coverage in BigWig format
         chromSize: chromosome sizes
         threshold: threshold to call peak
-        minInputQuantile: minimum input coverage
+        mode: 1 - using input as covariate 2 - using input as offset
 
     Returns:
         peak files (original peaks, merged peaks, and centered final peaks)
