@@ -16,7 +16,7 @@ Peak caller for STARR-seq data
 ## installation
 
 ```
-git clone https://github.com/hoondy/starrpeaker.git
+git clone https://github.com/gersteinlab/starrpeaker.git
 cd starrpeaker
 sudo python setup.py install --record files.txt
 starrpeaker -h
