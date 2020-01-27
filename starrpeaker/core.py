@@ -651,6 +651,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     q_score = -np.log10(pval_adj)
 
     ### output peak
+    print("[%s] Output initial peaks" % (timestamp()))
     with open(prefix + ".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & nonZeroOutput))):
