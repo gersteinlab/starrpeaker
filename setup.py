@@ -4,7 +4,7 @@ setup(name='starrpeaker',
       version='0.1',
       description='STARR-seq peak caller',
       keywords = "STARR-seq, peaks, bioinformatics",
-      url='http://github.com/hoondy/starrpeaker',
+      url='http://github.com/gersteinlab/starrpeaker',
       author='Donghoon Lee',
       author_email='donghoon.lee@yale.edu',
       license='GPL',
@@ -16,11 +16,12 @@ setup(name='starrpeaker',
           'statsmodels',
           'pysam',
           'pybedtools',
-          'pyBigWig'
+          'pyBigWig',
+          'scikit-learn'
       ],
       entry_points = {
           'console_scripts': [
-              'starrpeaker = starrpeaker.starrpeaker.starrpeaker:main'
+              'starrpeaker = starrpeaker.starrpeaker:main'
           ]
           }
       )
