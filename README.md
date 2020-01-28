@@ -14,11 +14,9 @@ Peak caller for STARR-seq data
 * sklearn (tested on 0.20.3)
 
 ## installation
-
+With python 2.7 installed, preferably in a conda environment
 ```
-git clone https://github.com/gersteinlab/starrpeaker.git
-cd starrpeaker
-sudo python setup.py install --record files.txt
+pip install git+https://github.com/gersteinlab/starrpeaker
 starrpeaker -h
 ```
 
