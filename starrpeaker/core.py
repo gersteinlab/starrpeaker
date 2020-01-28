@@ -655,7 +655,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     with open(prefix + ".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & nonZeroOutput))):
-                if pval[i] <= float(threshold):
+                if pval_adj[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
                         bin.strip(), fc[nonZeroInput & nonZeroOutput][i], p_score[i], q_score[i], pval[i], pval_adj[i]))
 
