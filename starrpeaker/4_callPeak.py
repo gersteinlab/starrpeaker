@@ -29,7 +29,7 @@ if __name__ == "__main__": core.call_peak(prefix=args.prefix,
                                           bedFile=args.prefix + ".bin.bed",
                                           bctFile=args.prefix + ".bam.bct",
                                           covFile=args.prefix + ".cov.tsv",
-                                          bwFile=args.prefix + ".bam.bct.1.bw",
+                                          bwFile=args.prefix + ".bam.bct.1.all.bw",
                                           chromSize=args.chromsize,
                                           threshold=args.threshold,
                                           mode=args.mode)
