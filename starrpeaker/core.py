@@ -518,14 +518,14 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
     ### load data
     print("[%s] Loading fragment coverages, and covariates" % (timestamp()))
-    bct = np.loadtxt(bctFile, ndmin=2)  # 0=input, 1=output, 2=normalized input
-    cov = np.loadtxt(covFile, ndmin=2)  # 3:=cov
+    bct = np.loadtxt(bctFile, ndmin=2)  # BCT 0=input, 1=output, 2=normalized input
+    cov = np.loadtxt(covFile, ndmin=2)  # COV 3:=cov
 
     ### scale covariates to have mean 0 and sd 1
     cov_scaled = preprocessing.scale(cov, axis=0)
 
     ### merge data
-    mat = np.concatenate((bct[:, [1, 0, 2]], cov_scaled), axis=1)  # 0=output, 1=input, 2=normalized input, 3:=cov
+    mat = np.concatenate((bct[:, [1, 0, 2]], cov_scaled), axis=1)  # MAT 0=output, 1=input, 2=normalized input, 3:=cov
     del bct, cov, cov_scaled
 
     ### non sliding bins
@@ -545,22 +545,28 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     minInput = 0
     maxInput = np.quantile(mat[:, 1], 0.99)
     nonZeroInput = (mat[:, 1] > minInput) & (mat[:, 1] < maxInput)
-    nonZeroOutput = (mat[:, 0] > 0)
+    minOutput = 0
+    nonZeroOutput = (mat[:, 0] > minOutput)
 
     ### calculate fold change
     fc = np.zeros(mat.shape[0])
     fc[mat[:, 1] > 0] = mat[mat[:, 1] > 0, 0] / (mat[mat[:, 1] > 0, 2])
 
+    ### train / test genomic bin ###
+    trainingBin = nonZeroInput & nonSliding
+    testingBin = nonZeroInput & nonZeroOutput & (fc>1.5) ### bins with fold change > 1.5 are tested for statistical significance
+
     ### filtering bins
-    print("[%s] Before filtering: %s" % (timestamp(), mat.shape[0]))
+    print("[%s] Total genomic bins: %s" % (timestamp(), mat.shape[0]))
 
-    print("[%s] Removing %i bins with insufficient input coverage" % (timestamp(), sum(np.invert(nonZeroInput))))
-    print("[%s] Bins with sufficient input coverage: %s" % (timestamp(), mat[nonZeroInput, :].shape[0]))
+    print("[%s] %i bins have insufficient input coverage" % (timestamp(), sum(np.invert(nonZeroInput))))
+    # print("[%s] Bins with sufficient input coverage: %s" % (timestamp(), mat[nonZeroInput, :].shape[0]))
 
-    print("[%s] Removing %i sliding bins" % (timestamp(), sum(np.invert(nonSliding))))
-    print("[%s] Bins with non-sliding window: %s" % (timestamp(), mat[nonSliding, :].shape[0]))
+    print("[%s] %i bins overlap with other bins (sliding bins)" % (timestamp(), sum(np.invert(nonSliding))))
+    # print("[%s] Bins with non-sliding window: %s" % (timestamp(), mat[nonSliding, :].shape[0]))
 
-    print("[%s] After filtering: %s" % (timestamp(), mat[nonZeroInput & nonSliding, :].shape[0]))
+    print("[%s] Genomic bins used for training: %s" % (timestamp(), mat[trainingBin, :].shape[0]))
+    print("[%s] Genomic bins used for testing: %s" % (timestamp(), mat[testingBin, :].shape[0]))
 
     ### mode 2 uses "input" as offset variable
     if int(mode) == 2:
@@ -570,7 +576,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
         ### formula
         x = ["x" + str(i) for i in range(1, mat.shape[1] - 1)]
-        df = pd.DataFrame(mat[nonZeroInput & nonSliding, :], columns=["y", "exposure"] + x)
+        df = pd.DataFrame(mat[trainingBin, :], columns=["y", "exposure"] + x)
         formula = "y~" + "+".join(df.columns.difference(["y", "exposure"]))
         print("[%s] Fit using formula: %s" % (timestamp(), formula))
 
@@ -580,7 +586,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         # print model0.summary()
 
         ### Estimate theta
-        th0, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model0.mu)
+        th0, _ = theta(mat[trainingBin, :][:, 0], model0.mu)
         print("[%s] Initial estimate of theta is %f" % (timestamp(), th0))
 
         ### re-estimate beta with theta
@@ -590,13 +596,13 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         # print model.summary()
 
         ### Re-estimate theta
-        th, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model.mu)
+        th, _ = theta(mat[trainingBin, :][:, 0], model.mu)
         print("[%s] Re-estimate of theta is %f" % (timestamp(), th))
 
         ### predict
-        print("[%s] Predicting expected counts for bins above a minimum threshold: %s" % (
-            timestamp(), mat[nonZeroInput & nonZeroOutput, :].shape[0]))
-        df = pd.DataFrame(mat[nonZeroInput & nonZeroOutput, :], columns=["y", "exposure"] + x)
+        print("[%s] Predicting expected counts for %s bins" % (
+            timestamp(), mat[testingBin, :].shape[0]))
+        df = pd.DataFrame(mat[testingBin, :], columns=["y", "exposure"] + x)
         y_hat = model.predict(df, offset=np.log(df["exposure"]))
 
     ### mode 1 uses "input" as covariate (default):
@@ -607,7 +613,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
         ### formula
         x = ["x" + str(i) for i in range(1, mat.shape[1])]
-        df = pd.DataFrame(mat[nonZeroInput & nonSliding, :], columns=["y"] + x)
+        df = pd.DataFrame(mat[trainingBin, :], columns=["y"] + x)
         formula = "y~" + "+".join(df.columns.difference(["y"]))
         print("[%s] Fit using formula: %s" % (timestamp(), formula))
 
@@ -617,7 +623,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         # print model0.summary()
 
         ### Estimate theta
-        th0, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model0.mu)
+        th0, _ = theta(mat[trainingBin, :][:, 0], model0.mu)
         print("[%s] Initial estimate of theta is %f" % (timestamp(), th0))
 
         ### re-estimate beta with theta
@@ -627,20 +633,20 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         # print model.summary()
 
         ### Re-estimate theta
-        th, _ = theta(mat[nonZeroInput & nonSliding, :][:, 0], model.mu)
+        th, _ = theta(mat[trainingBin, :][:, 0], model.mu)
         print("[%s] Re-estimate of theta is %f" % (timestamp(), th))
 
         ### predict
-        print("[%s] Predicting expected counts for bins above a minimum threshold: %s" % (
-            timestamp(), mat[nonZeroInput & nonZeroOutput, :].shape[0]))
-        df = pd.DataFrame(mat[nonZeroInput & nonZeroOutput, :], columns=["y"] + x)
+        print("[%s] Predicting expected counts for %s bins" % (
+            timestamp(), mat[testingBin, :].shape[0]))
+        df = pd.DataFrame(mat[testingBin, :], columns=["y"] + x)
         y_hat = model.predict(df)
 
     ### calculate P-value
     print("[%s] Calculating P-value" % (timestamp()))
     theta_hat = np.repeat(th, len(y_hat))
     prob = th / (th + y_hat)  ### prob=theta/(theta+mu)
-    pval = 1 - nbinom.cdf(mat[nonZeroInput & nonZeroOutput, 0] - 1, n=theta_hat, p=prob)
+    pval = 1 - nbinom.cdf(mat[testingBin, 0] - 1, n=theta_hat, p=prob)
     del mat
 
     ### multiple testing correction
@@ -654,16 +660,16 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     print("[%s] Output initial peaks" % (timestamp()))
     with open(prefix + ".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
-            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & nonZeroOutput))):
+            for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
                 if pval_adj[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
-                        bin.strip(), fc[nonZeroInput & nonZeroOutput][i], p_score[i], q_score[i], pval[i], pval_adj[i]))
+                        bin.strip(), fc[testingBin][i], p_score[i], q_score[i], pval[i], pval_adj[i]))
 
     ### output p-val track
     print("[%s] Generating P-value bedGraph" % (timestamp()))
     with open(prefix + ".pval.bdg", "w") as out:
         with open(bedFile, "r") as bed:
-            for i, bin in enumerate(list(compress(bed.readlines(), nonZeroInput & nonZeroOutput))):
+            for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
                 out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
     del p_score, q_score, pval, pval_adj
 
@@ -672,16 +678,32 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     make_bigwig(prefix=prefix, bedFile=bedFile, bctFile=bctFile, chromSize=chromSize, bedGraphFile=prefix + ".pval.bdg")
     safe_remove(prefix + ".pval.bdg")
 
+### original
+
     ### merge peak
     print("[%s] Merge peaks" % (timestamp()))
     pybedtools.BedTool(prefix + ".peak.bed").merge(c=[4, 5, 6, 7, 8], o=["max", "max", "max", "min", "min"]).saveas(
         prefix + ".peak.merged.bed")
 
     ### center merged peak
-    print("[%s] Finalizing peaks" % (timestamp()))
+    print("[%s] Center & finalize peaks" % (timestamp()))
     center_peak(bwFile=bwFile,
                 peakFile=prefix + ".peak.merged.bed",
-                centeredPeakFile=prefix + ".peak.final.bed")
+                centeredPeakFile=prefix + ".peak.merged.centered.final.bed")
+
+### new
+
+    ### center peak
+    print("[%s] Center peaks" % (timestamp()))
+    center_peak(bwFile=bwFile,
+                peakFile=prefix + ".peak.bed",
+                centeredPeakFile=prefix + ".peak.centered.bed")
+
+    ### merge centered peak
+    print("[%s] Merge & finalize peaks" % (timestamp()))
+    pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 5, 6, 7, 8], o=["max", "max", "max", "min", "min"]).saveas(
+        prefix + ".peak.centered.merged.final.bed")
+
 
     print("[%s] Done" % (timestamp()))
 
