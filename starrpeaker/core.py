@@ -541,9 +541,9 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
                 lastbin = int(bin.split("\t")[2])
                 nonSliding[i] = True
 
-    ### remove bins with input (and output) count of zero (i.e., untested region) OR extreme values (top 1%, i.e., sequencing artifacts)
+    ### remove bins with input (and output) count of zero (i.e., untested region) OR extreme values (top 0.001%, i.e., sequencing artifacts)
     minInput = 0
-    maxInput = np.quantile(mat[:, 1], 0.99)
+    maxInput = np.quantile(mat[:, 1], 0.99999)
     nonZeroInput = (mat[:, 1] > minInput) & (mat[:, 1] < maxInput)
     minOutput = 0
     nonZeroOutput = (mat[:, 0] > minOutput)
@@ -554,7 +554,8 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
     ### train / test genomic bin ###
     trainingBin = nonZeroInput & nonSliding
-    testingBin = nonZeroInput & nonZeroOutput & (fc>1.5) ### bins with fold change > 1.5 are tested for statistical significance
+    testingBin = nonZeroInput & nonZeroOutput & (
+                fc > 1.5)  ### bins with fold change > 1.5 are tested for statistical significance
 
     ### filtering bins
     print("[%s] Total genomic bins: %s" % (timestamp(), mat.shape[0]))
@@ -647,7 +648,6 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     theta_hat = np.repeat(th, len(y_hat))
     prob = th / (th + y_hat)  ### prob=theta/(theta+mu)
     pval = 1 - nbinom.cdf(mat[testingBin, 0] - 1, n=theta_hat, p=prob)
-    del mat
 
     ### multiple testing correction
     print("[%s] Multiple testing correction" % (timestamp()))
@@ -663,7 +663,10 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
             for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
                 if pval_adj[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
-                        bin.strip(), fc[testingBin][i], p_score[i], q_score[i], pval[i], pval_adj[i]))
+                        bin.strip(), fc[testingBin][i], mat[testingBin, 1][i], mat[testingBin, 0][i], pval[i],
+                        pval_adj[i]))  ### chr, start, end, foldChg, inputCt, outputCt, pval, qval
+
+    del mat
 
     ### output p-val track
     print("[%s] Generating P-value bedGraph" % (timestamp()))
@@ -671,27 +674,25 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
                 out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
+
+    ### output q-val track
+    print("[%s] Generating Q-value bedGraph" % (timestamp()))
+    with open(prefix + ".qval.bdg", "w") as out:
+        with open(bedFile, "r") as bed:
+            for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
+                out.write("%s\t%.3f\n" % (bin.strip(), abs(q_score[i])))
+
     del p_score, q_score, pval, pval_adj
 
     ### make bigWig track
     print("[%s] Making BigWig tracks" % (timestamp()))
-    make_bigwig(prefix=prefix, bedFile=bedFile, bctFile=bctFile, chromSize=chromSize, bedGraphFile=prefix + ".pval.bdg")
+    make_bigwig(prefix=prefix, bedFile=bedFile, bctFile=bctFile, chromSize=chromSize)
+
+    bdg2bw(bdgFile=prefix + ".pval.bdg", bwFile=prefix + ".pval.bw", chromSize=chromSize)
     safe_remove(prefix + ".pval.bdg")
 
-### original
-
-    ### merge peak
-    print("[%s] Merge peaks" % (timestamp()))
-    pybedtools.BedTool(prefix + ".peak.bed").merge(c=[4, 5, 6, 7, 8], o=["max", "max", "max", "min", "min"]).saveas(
-        prefix + ".peak.merged.bed")
-
-    ### center merged peak
-    print("[%s] Center & finalize peaks" % (timestamp()))
-    center_peak(bwFile=bwFile,
-                peakFile=prefix + ".peak.merged.bed",
-                centeredPeakFile=prefix + ".peak.merged.centered.final.bed")
-
-### new
+    bdg2bw(bdgFile=prefix + ".qval.bdg", bwFile=prefix + ".qval.bw", chromSize=chromSize)
+    safe_remove(prefix + ".qval.bdg")
 
     ### center peak
     print("[%s] Center peaks" % (timestamp()))
@@ -701,9 +702,12 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
     ### merge centered peak
     print("[%s] Merge & finalize peaks" % (timestamp()))
-    pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 5, 6, 7, 8], o=["max", "max", "max", "min", "min"]).saveas(
-        prefix + ".peak.centered.merged.final.bed")
+    pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 5, 6, 7, 8],
+                                                            o=["max", "max", "max", "min", "min"]).saveas(
+        prefix + ".peak.final.bed")
 
+    ### remove intermediate peak file
+    safe_remove(prefix + ".peak.centered.bed")
 
     print("[%s] Done" % (timestamp()))
 
@@ -719,6 +723,7 @@ def make_bigwig(prefix, bedFile, bctFile, chromSize, bedGraphFile=""):
 
     l = ends[0] - starts[0]
     s = starts[1] - starts[0]
+
     print("[%s] Using fixed interval of %i" % (timestamp(), s))
 
     nonoverlapping = ends - starts == l
@@ -768,26 +773,26 @@ def make_bigwig(prefix, bedFile, bctFile, chromSize, bedGraphFile=""):
     #     for x in zip(chroms,starts,ends,val_input):
     #         b.write('\t'.join(map(str,x))+'\n')
 
-    if bedGraphFile != "":
-        print("[%s] Making P-value BigWig track" % (timestamp()))
-
-        bin = np.genfromtxt(bedGraphFile, dtype=str)
-        starts = np.array(bin[:, 1], dtype=np.int32)
-        ends = np.array(bin[:, 2], dtype=np.int32)
-
-        nonoverlapping = ends - starts == l
-
-        chroms = (np.array(bin[:, 0]))[nonoverlapping]
-        starts = (np.array(bin[:, 1], dtype=np.int32) + int(l / 2) - int(s / 2))[nonoverlapping]
-        ends = (np.array(bin[:, 2], dtype=np.int32) - int(l / 2) + int(s / 2))[nonoverlapping]
-        val_pval = np.array(bin[:, 3], dtype=np.float32)[nonoverlapping]
-
-        ### pval signal
-
-        bw4 = pyBigWig.open(prefix + ".pval.bw", "w")
-        bw4.addHeader([(str(x[0]), int(x[1])) for x in cs])
-        bw4.addEntries(chroms=chroms, starts=starts, ends=ends, values=val_pval)
-        bw4.close()
+    # if bedGraphFile != "":
+    #     print("[%s] Making P-value BigWig track" % (timestamp()))
+    #
+    #     bin = np.genfromtxt(bedGraphFile, dtype=str)
+    #     starts = np.array(bin[:, 1], dtype=np.int32)
+    #     ends = np.array(bin[:, 2], dtype=np.int32)
+    #
+    #     nonoverlapping = ends - starts == l
+    #
+    #     chroms = (np.array(bin[:, 0]))[nonoverlapping]
+    #     starts = (np.array(bin[:, 1], dtype=np.int32) + int(l / 2) - int(s / 2))[nonoverlapping]
+    #     ends = (np.array(bin[:, 2], dtype=np.int32) - int(l / 2) + int(s / 2))[nonoverlapping]
+    #     val_pval = np.array(bin[:, 3], dtype=np.float32)[nonoverlapping]
+    #
+    #     ### pval signal
+    #
+    #     bw4 = pyBigWig.open(prefix + ".pval.bw", "w")
+    #     bw4.addHeader([(str(x[0]), int(x[1])) for x in cs])
+    #     bw4.addEntries(chroms=chroms, starts=starts, ends=ends, values=val_pval)
+    #     bw4.close()
 
 
 def bdg2bw(bdgFile, bwFile, chromSize):
