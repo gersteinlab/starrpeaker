@@ -550,24 +550,26 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
     ### calculate fold change
     fc = np.zeros(mat.shape[0])
-    fc[mat[:, 1] > 0] = mat[mat[:, 1] > 0, 0] / (mat[mat[:, 1] > 0, 2])
+    fc[mat[:, 2] > 0] = mat[mat[:, 2] > 0, 0] / (mat[mat[:, 2] > 0, 2])  ### fc = output / normalized_input
 
     ### train / test genomic bin ###
     trainingBin = nonZeroInput & nonSliding
     testingBin = nonZeroInput & nonZeroOutput & (
-                fc > 1.5)  ### bins with fold change > 1.5 are tested for statistical significance
+            fc > 1.5)  ### bins with fold change > 1.5 are tested for statistical significance
 
     ### filtering bins
-    print("[%s] Total genomic bins: %s" % (timestamp(), mat.shape[0]))
+    print("[%s] Total genomic bins: %s" % (timestamp(), '{:,}'.format(mat.shape[0])))
 
-    print("[%s] %i bins have insufficient input coverage" % (timestamp(), sum(np.invert(nonZeroInput))))
+    print("[%s] Genomic bins with insufficient input coverage: %s" % (
+    timestamp(), '{:,}'.format(sum(np.invert(nonZeroInput)))))
     # print("[%s] Bins with sufficient input coverage: %s" % (timestamp(), mat[nonZeroInput, :].shape[0]))
 
-    print("[%s] %i bins overlap with other bins (sliding bins)" % (timestamp(), sum(np.invert(nonSliding))))
+    print("[%s] Genomic bins overlap with other bins (sliding bins): %s" % (
+    timestamp(), '{:,}'.format(sum(np.invert(nonSliding)))))
     # print("[%s] Bins with non-sliding window: %s" % (timestamp(), mat[nonSliding, :].shape[0]))
 
-    print("[%s] Genomic bins used for training: %s" % (timestamp(), mat[trainingBin, :].shape[0]))
-    print("[%s] Genomic bins used for testing: %s" % (timestamp(), mat[testingBin, :].shape[0]))
+    print("[%s] Genomic bins used for training: %s" % (timestamp(), '{:,}'.format(mat[trainingBin, :].shape[0])))
+    print("[%s] Genomic bins used for testing: %s" % (timestamp(), '{:,}'.format(mat[testingBin, :].shape[0])))
 
     ### mode 2 uses "input" as offset variable
     if int(mode) == 2:
@@ -651,47 +653,68 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
     ### multiple testing correction
     print("[%s] Multiple testing correction" % (timestamp()))
-    _, pval_adj, _, _ = multi.multipletests(pval, method="fdr_bh")
+    _, qval, _, _ = multi.multipletests(pval, method="fdr_bh")
 
     p_score = -np.log10(pval)
-    q_score = -np.log10(pval_adj)
+    q_score = -np.log10(qval)
 
-    ### output peak
+    ### output initial peaks
     print("[%s] Output initial peaks" % (timestamp()))
     with open(prefix + ".peak.bed", "w") as out:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
-                if pval_adj[i] <= float(threshold):
+                if qval[i] <= float(threshold):
                     out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
                         bin.strip(), fc[testingBin][i], mat[testingBin, 1][i], mat[testingBin, 0][i], pval[i],
-                        pval_adj[i]))  ### chr, start, end, foldChg, inputCt, outputCt, pval, qval
+                        qval[i]))  ### chr, start, end, foldChg, inputCt, outputCt, pval, qval
 
-    del mat
-
-    ### output p-val track
-    print("[%s] Generating P-value bedGraph" % (timestamp()))
-    with open(prefix + ".pval.bdg", "w") as out:
+    ### generate various bdg tracks
+    print("[%s] Generating bedGraph files" % (timestamp()))
+    with open(prefix + ".pval.bdg", "w") as fp, open(prefix + ".qval.bdg", "w") as fq:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
-                out.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
+                fp.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
+                fq.write("%s\t%.3f\n" % (bin.strip(), abs(q_score[i])))
 
-    ### output q-val track
-    print("[%s] Generating Q-value bedGraph" % (timestamp()))
-    with open(prefix + ".qval.bdg", "w") as out:
+    with open(prefix + ".output.bdg", "w") as fo, open(prefix + ".input.bdg", "w") as fi, open(
+            prefix + ".normalized_input.bdg", "w") as fn, open(prefix + ".fc.bdg", "w") as ff:
         with open(bedFile, "r") as bed:
-            for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
-                out.write("%s\t%.3f\n" % (bin.strip(), abs(q_score[i])))
+            for i, bin in enumerate(bed.readlines()):
+                fo.write("%s\t%.3f\n" % (bed.strip(), mat[i, 0]))
+                fi.write("%s\t%.3f\n" % (bed.strip(), mat[i, 1]))
+                fn.write("%s\t%.3f\n" % (bed.strip(), mat[i, 2]))
+                ff.write("%s\t%.3f\n" % (bed.strip(), fc[i]))
 
-    del p_score, q_score, pval, pval_adj
+    del mat, p_score, q_score, pval, qval
 
     ### make bigWig track
     print("[%s] Making BigWig tracks" % (timestamp()))
-    make_bigwig(prefix=prefix, bedFile=bedFile, bctFile=bctFile, chromSize=chromSize)
+    # make_bigwig(prefix=prefix, bedFile=bedFile, bctFile=bctFile, chromSize=chromSize)
 
-    bdg2bw(bdgFile=prefix + ".pval.bdg", bwFile=prefix + ".pval.bw", chromSize=chromSize)
+    with open(bedFile) as bed:
+        c1, s1, e1 = bed.readline().strip().split('\t')
+        c2, s2, e2 = bed.readline().strip().split('\t')
+
+    w = int(e1) - int(s1)
+    s = int(s2) - int(s1)
+
+    bdg2bw(bdgFile=prefix + ".output.bdg", bwFile=prefix + ".output.bw", chromSize=chromSize, window=w, step=s)
+    safe_remove(prefix + ".output.bdg")
+
+    bdg2bw(bdgFile=prefix + ".input.bdg", bwFile=prefix + ".input.bw", chromSize=chromSize, window=w, step=s)
+    safe_remove(prefix + ".input.bdg")
+
+    bdg2bw(bdgFile=prefix + ".normalized_input.bdg", bwFile=prefix + ".normalized_input.bw", chromSize=chromSize,
+           window=w, step=s)
+    safe_remove(prefix + ".normalized_input.bdg")
+
+    bdg2bw(bdgFile=prefix + ".fc.bdg", bwFile=prefix + ".fc.bw", chromSize=chromSize, window=w, step=s)
+    safe_remove(prefix + ".fc.bdg")
+
+    bdg2bw(bdgFile=prefix + ".pval.bdg", bwFile=prefix + ".pval.bw", chromSize=chromSize, window=w, step=s)
     safe_remove(prefix + ".pval.bdg")
 
-    bdg2bw(bdgFile=prefix + ".qval.bdg", bwFile=prefix + ".qval.bw", chromSize=chromSize)
+    bdg2bw(bdgFile=prefix + ".qval.bdg", bwFile=prefix + ".qval.bw", chromSize=chromSize, window=w, step=s)
     safe_remove(prefix + ".qval.bdg")
 
     ### center peak
@@ -712,7 +735,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     print("[%s] Done" % (timestamp()))
 
 
-def make_bigwig(prefix, bedFile, bctFile, chromSize, bedGraphFile=""):
+def make_bigwig(prefix, bedFile, bctFile, chromSize):
     with open(chromSize) as f: cs = [line.strip().split('\t') for line in f.readlines()]
 
     bin = np.genfromtxt(bedFile, dtype=str)
@@ -795,26 +818,10 @@ def make_bigwig(prefix, bedFile, bctFile, chromSize, bedGraphFile=""):
     #     bw4.close()
 
 
-def bdg2bw(bdgFile, bwFile, chromSize):
+def bdg2bw(bdgFile, bwFile, chromSize, window=None, step=None):
+    print("[%s] Writing %s" % (timestamp(), bwFile))
     with open(chromSize) as f:
         cs = [line.strip().split('\t') for line in f.readlines()]
-
-    bdg = np.genfromtxt(bdgFile, dtype=str)
-
-    starts = np.array(bdg[:, 1], dtype=np.int32)
-    ends = np.array(bdg[:, 2], dtype=np.int32)
-
-    l = ends[0] - starts[0]
-    s = starts[1] - starts[0]
-
-    print("[%s] Using fixed interval of %i" % (timestamp(), s))
-
-    nonoverlapping = ends - starts == l
-
-    chroms = (np.array(bdg[:, 0]))[nonoverlapping]
-    starts = (np.array(bdg[:, 1], dtype=np.int32) + int(l / 2) - int(s / 2))[nonoverlapping]
-    ends = (np.array(bdg[:, 2], dtype=np.int32) - int(l / 2) + int(s / 2))[nonoverlapping]
-    vals = (np.array(bdg[:, 3], dtype=np.float32))[nonoverlapping]
 
     bw = pyBigWig.open(bwFile, "w")
     bw.addHeader([(str(x[0]), int(x[1])) for x in cs])
@@ -823,7 +830,15 @@ def bdg2bw(bdgFile, bwFile, chromSize):
         for line in bdg:
             if len(line.strip().split("\t")) == 4:
                 chr, start, end, val = line.strip().split("\t")
-                bw.addEntries(chroms=chroms, starts=starts, ends=ends, values=vals)
+
+                if window and step:
+                    print("[%s] Making bigWig using fixed interval size of %i" % (timestamp(), step))
+                    if (int(end) - int(start)) == window:
+                        bw.addEntries(chroms=[chr], starts=[(int(end) - int(window / 2) - int(step / 2))],
+                                      ends=[(int(end) - int(window / 2) + int(step / 2))], values=[float(val)])
+                else:
+                    bw.addEntries(chroms=[chr], starts=[int(start)], ends=[int(end)], values=[float(val)])
+
             else:
                 print("[%s] Warning: skipping bedGraph entry: %s" % (timestamp(), line.strip()))
 
