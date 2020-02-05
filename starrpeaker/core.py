@@ -799,6 +799,23 @@ def bdg2bw(bdgFile, bwFile, chromSize):
     with open(chromSize) as f:
         cs = [line.strip().split('\t') for line in f.readlines()]
 
+    bdg = np.genfromtxt(bdgFile, dtype=str)
+
+    starts = np.array(bdg[:, 1], dtype=np.int32)
+    ends = np.array(bdg[:, 2], dtype=np.int32)
+
+    l = ends[0] - starts[0]
+    s = starts[1] - starts[0]
+
+    print("[%s] Using fixed interval of %i" % (timestamp(), s))
+
+    nonoverlapping = ends - starts == l
+
+    chroms = (np.array(bdg[:, 0]))[nonoverlapping]
+    starts = (np.array(bdg[:, 1], dtype=np.int32) + int(l / 2) - int(s / 2))[nonoverlapping]
+    ends = (np.array(bdg[:, 2], dtype=np.int32) - int(l / 2) + int(s / 2))[nonoverlapping]
+    vals = (np.array(bdg[:, 3], dtype=np.float32))[nonoverlapping]
+
     bw = pyBigWig.open(bwFile, "w")
     bw.addHeader([(str(x[0]), int(x[1])) for x in cs])
 
@@ -806,7 +823,7 @@ def bdg2bw(bdgFile, bwFile, chromSize):
         for line in bdg:
             if len(line.strip().split("\t")) == 4:
                 chr, start, end, val = line.strip().split("\t")
-                bw.addEntries(chroms=[chr], starts=[int(start)], ends=[int(end)], values=[float(val)])
+                bw.addEntries(chroms=chroms, starts=starts, ends=ends, values=vals)
             else:
                 print("[%s] Warning: skipping bedGraph entry: %s" % (timestamp(), line.strip()))
 
