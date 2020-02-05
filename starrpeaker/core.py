@@ -561,11 +561,11 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     print("[%s] Total genomic bins: %s" % (timestamp(), '{:,}'.format(mat.shape[0])))
 
     print("[%s] Genomic bins with insufficient input coverage: %s" % (
-    timestamp(), '{:,}'.format(sum(np.invert(nonZeroInput)))))
+        timestamp(), '{:,}'.format(sum(np.invert(nonZeroInput)))))
     # print("[%s] Bins with sufficient input coverage: %s" % (timestamp(), mat[nonZeroInput, :].shape[0]))
 
     print("[%s] Genomic bins overlap with other bins (sliding bins): %s" % (
-    timestamp(), '{:,}'.format(sum(np.invert(nonSliding)))))
+        timestamp(), '{:,}'.format(sum(np.invert(nonSliding)))))
     # print("[%s] Bins with non-sliding window: %s" % (timestamp(), mat[nonSliding, :].shape[0]))
 
     print("[%s] Genomic bins used for training: %s" % (timestamp(), '{:,}'.format(mat[trainingBin, :].shape[0])))
@@ -680,10 +680,10 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
             prefix + ".normalized_input.bdg", "w") as fn, open(prefix + ".fc.bdg", "w") as ff:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(bed.readlines()):
-                fo.write("%s\t%.3f\n" % (bed.strip(), mat[i, 0]))
-                fi.write("%s\t%.3f\n" % (bed.strip(), mat[i, 1]))
-                fn.write("%s\t%.3f\n" % (bed.strip(), mat[i, 2]))
-                ff.write("%s\t%.3f\n" % (bed.strip(), fc[i]))
+                fo.write("%s\t%.3f\n" % (bin.strip(), mat[i, 0]))
+                fi.write("%s\t%.3f\n" % (bin.strip(), mat[i, 1]))
+                fn.write("%s\t%.3f\n" % (bin.strip(), mat[i, 2]))
+                ff.write("%s\t%.3f\n" % (bin.strip(), fc[i]))
 
     del mat, p_score, q_score, pval, qval
 
@@ -826,21 +826,26 @@ def bdg2bw(bdgFile, bwFile, chromSize, window=None, step=None):
     bw = pyBigWig.open(bwFile, "w")
     bw.addHeader([(str(x[0]), int(x[1])) for x in cs])
 
-    with open(bdgFile, "r") as bdg:
-        for line in bdg:
-            if len(line.strip().split("\t")) == 4:
-                chr, start, end, val = line.strip().split("\t")
-
-                if window and step:
-                    print("[%s] Making bigWig using fixed interval size of %i" % (timestamp(), step))
+    if window and step:
+        print("[%s] Making bigWig using fixed interval size of %i" % (timestamp(), step))
+        with open(bdgFile, "r") as bdg:
+            for line in bdg:
+                if len(line.strip().split("\t")) == 4:
+                    chr, start, end, val = line.strip().split("\t")
                     if (int(end) - int(start)) == window:
                         bw.addEntries(chroms=[chr], starts=[(int(end) - int(window / 2) - int(step / 2))],
                                       ends=[(int(end) - int(window / 2) + int(step / 2))], values=[float(val)])
                 else:
-                    bw.addEntries(chroms=[chr], starts=[int(start)], ends=[int(end)], values=[float(val)])
+                    print("[%s] Warning: skipping bedGraph entry: %s" % (timestamp(), line.strip()))
 
-            else:
-                print("[%s] Warning: skipping bedGraph entry: %s" % (timestamp(), line.strip()))
+    else:
+        with open(bdgFile, "r") as bdg:
+            for line in bdg:
+                if len(line.strip().split("\t")) == 4:
+                    chr, start, end, val = line.strip().split("\t")
+                    bw.addEntries(chroms=[chr], starts=[int(start)], ends=[int(end)], values=[float(val)])
+                else:
+                    print("[%s] Warning: skipping bedGraph entry: %s" % (timestamp(), line.strip()))
 
     bw.close()
 
