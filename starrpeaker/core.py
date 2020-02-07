@@ -226,7 +226,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize):
 
         tct[j] += template_count_used
 
-        print("[%s] %i mapped reads" % (timestamp(), '{:,}'.format(b.mapped)))
+        print("[%s] %i mapped reads" % (timestamp(), '{:,}'.format(int(b.mapped))))
         # print("[%s] %i reads in proper pairs" % (timestamp(), proper_pair_count))
         # print("[%s] %i chimeric reads removed" % (timestamp(), chimeric_count))
         print("[%s] %i templates extracted" % (timestamp(), '{:,}'.format(template_count)))
