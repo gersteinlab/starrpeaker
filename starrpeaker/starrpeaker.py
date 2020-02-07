@@ -26,7 +26,7 @@ parser.add_argument('-o', '--output', help='STARR-seq BAM File', required=True)
 ### optional args
 parser.add_argument('--length', help='Bin Length', required=False, default=500)
 parser.add_argument('--step', help='Step Size', required=False, default=100)
-parser.add_argument('--min', help='Minimum Template Size', required=False, default=100)
+parser.add_argument('--min', help='Minimum Template Size', required=False, default=200)
 parser.add_argument('--max', help='Maximum Template Size', required=False, default=1000)
 parser.add_argument('--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
 parser.add_argument('--minquantile', help='Minimum Input Quantile', required=False, default=0.2)
