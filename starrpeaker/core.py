@@ -498,7 +498,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     maxInput = np.quantile(mat[:, 1], 0.99999)
     nonZeroInput = (mat[:, 1] > minInput) & (mat[:, 1] < maxInput)
 
-    maxOutput = np.quantile(mat[:, 0], 0.999)
+    maxOutput = np.quantile(mat[:, 0], 0.99999)
     nonMaxOutput = (mat[:, 0] < maxOutput)
 
     ### calculate fold change
