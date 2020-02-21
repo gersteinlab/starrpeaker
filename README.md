@@ -86,7 +86,7 @@ optional arguments:
 * '-o' or '--output': STARR-seq BAM File
 
 optional args
-* '--min': Minimum Template Size, default=100
+* '--min': Minimum Template Size, default=200
 * '--max': Maximum Template Size, default=1000
 * '-t', '--threshold': Adjusted P-value Threshold, default=0.05
 
