@@ -24,13 +24,14 @@ parser.add_argument('-i', '--input', help='Input BAM File', required=True)
 parser.add_argument('-o', '--output', help='STARR-seq BAM File', required=True)
 
 ### optional args
-parser.add_argument('--length', help='Bin Length', required=False, default=500)
-parser.add_argument('--step', help='Step Size', required=False, default=100)
-parser.add_argument('--min', help='Minimum Template Size', required=False, default=200)
-parser.add_argument('--max', help='Maximum Template Size', required=False, default=1000)
-parser.add_argument('--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
-parser.add_argument('--minquantile', help='Minimum Input Quantile', required=False, default=0.2)
-parser.add_argument('--mode', help='Mode', required=False, default=1)
+parser.add_argument('--length', help='Bin Length', required=False, type=int, default=500)
+parser.add_argument('--step', help='Step Size', required=False, type=int, default=100)
+parser.add_argument('--min', help='Minimum Template Size', required=False, type=int, default=200)
+parser.add_argument('--max', help='Maximum Template Size', required=False, type=int, default=1000)
+parser.add_argument('--threshold', help='Adjusted P-value Threshold', required=False, type=float, default=0.05)
+parser.add_argument('--mode', help='Mode', required=False, type=int, default=1)
+parser.add_argument('--mincov', help='Minimum Coverage', required=False, type=int, default=10)
+parser.add_argument('--eq', help='Extreme Quantile to Remove', required=False, type=float, default=1e-5)
 
 args = parser.parse_args()
 
@@ -64,6 +65,8 @@ def main():
                    bwFile=args.prefix + ".bam.bct.1.all.bw",
                    chromSize=args.chromsize,
                    threshold=args.threshold,
-                   mode=args.mode)
+                   mode=args.mode,
+                   minCoverage=args.mincov,
+                   extQuantile=args.eq)
 
 if __name__ == "__main__": main()

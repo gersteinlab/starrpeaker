@@ -21,8 +21,8 @@ parser.add_argument('--chromsize', help='Chrom Sizes', required=True)
 parser.add_argument('--blacklist', help='Blacklist Region in BED format', required=True)
 
 ### optional args
-parser.add_argument('--length', help='Bin Length', required=False, default=500)
-parser.add_argument('--step', help='Step Size', required=False, default=100)
+parser.add_argument('--length', help='Bin Length', required=False, type=int, default=500)
+parser.add_argument('--step', help='Step Size', required=False, type=int, default=100)
 
 args = parser.parse_args()
 

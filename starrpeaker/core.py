@@ -449,7 +449,7 @@ def theta(y, mu, verbose=False):
     return t0, se
 
 
-def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, mode):
+def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, mode, minCoverage=10, extQuantile=1e-5):
     '''
 
     Args:
@@ -461,9 +461,12 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         chromSize: chromosome sizes
         threshold: threshold to call peak
         mode: 1 - using input as covariate 2 - using input as offset
+        minCoverage: minimum coverage required for peak
+        extQuantile: to remove genomic bins having extreme quantile (sequencing artifact)
 
     Returns:
-        peak files (original peaks, merged peaks, and centered final peaks)
+        peak files (original peaks and center-merged final peaks)
+        peak format: chr, start, end, foldChg, inputCt, outputCt, pval, qval
 
     '''
     print("[%s] Calling peaks" % (timestamp()))
@@ -478,6 +481,11 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
     ### merge data
     mat = np.concatenate((bct[:, [1, 0, 2]], cov_scaled), axis=1)  # MAT 0=output, 1=input, 2=normalized input, 3:=cov
+
+    bct_o = mat[:, 0]
+    bct_i = mat[:, 1]
+    bct_n = mat[:, 2]
+
     del bct, cov, cov_scaled
 
     ### non sliding bins
@@ -494,39 +502,35 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
                 nonSliding[i] = True
 
     ### remove bins with input count of zero (i.e., untested region) OR extreme values (top 0.001%, i.e., sequencing artifacts)
-    minInput = 0
-    maxInput = np.quantile(mat[:, 1], 0.99999)
-    nonZeroInput = (mat[:, 1] > minInput) & (mat[:, 1] < maxInput)
 
-    maxOutput = np.quantile(mat[:, 0], 0.99999)
-    nonMaxOutput = (mat[:, 0] < maxOutput)
+    minInput = minCoverage
+    maxInput = np.quantile(bct_i[bct_i > 0], (1-extQuantile))
+    # print(minInput, maxInput)
+
+    minOutput = minCoverage
+    maxOutput = np.quantile(bct_o[bct_o > 0], (1-extQuantile))
+    # print(minOutput, maxOutput)
 
     ### calculate fold change
     fc = np.zeros(mat.shape[0])
-    fc[mat[:, 2] > 0] = mat[mat[:, 2] > 0, 0] / (mat[mat[:, 2] > 0, 2])  ### fc = output / normalized_input
+    fc[bct_n > 0] = bct_o[bct_n > 0] / (bct_n[bct_n > 0])  ### fc = output / normalized_input
 
     ### train / test genomic bin ###
-    trainingBin = nonZeroInput & nonSliding & nonMaxOutput
-    testingBin = nonZeroInput & (fc > 1.5)  ### bins w/ FC > 1.5 are tested for statistical significance
+    trainingBin = (bct_i > minInput) & (bct_i < maxInput) & (bct_o > minOutput) & (bct_o < maxOutput) & nonSliding
+    testingBin = (bct_i > minInput) & (bct_i < maxInput) & (fc > 1.5)  ### bins w/ FC > 1.5 are tested for statistical significance
 
     ### filtering bins
     print("[%s] Total genomic bins: %s" % (timestamp(), '{:,}'.format(mat.shape[0])))
+    print("[%s] Total non-overlapping genomic bins: %s" % (timestamp(), '{:,}'.format(sum(nonSliding))))
 
-    print("[%s] Removing bins with input counts larger than %s for training and testing" % (
-        timestamp(), '{:,}'.format(maxInput)))
+    # print("[%s] Genomic bins with insufficient input coverage: %s" % (timestamp(), '{:,}'.format(sum(np.invert((bct_i > minInput))))))
+    # print("[%s] Genomic bins with sufficient input coverage: %s" % (timestamp(), '{:,}'.format(sum((bct_i > minInput)))))
+
+    print("[%s] Removing bins with input counts larger than %s for training and testing" % (timestamp(), '{:,}'.format(maxInput)))
     print("[%s] Removing bins with output counts larger than %s for training" % (timestamp(), '{:,}'.format(maxOutput)))
 
-    print("[%s] Genomic bins with insufficient input coverage: %s" % (
-        timestamp(), '{:,}'.format(sum(np.invert(nonZeroInput)))))
-    print("[%s] Genomic bins with sufficient input coverage: %s" % (timestamp(), '{:,}'.format(sum(nonZeroInput))))
-
-    print("[%s] Genomic bins overlapping with other bins (sliding bins): %s" % (
-        timestamp(), '{:,}'.format(sum(np.invert(nonSliding)))))
-    print("[%s] Genomic bins non-overlapping with other bins (non-sliding bins): %s" % (
-        timestamp(), '{:,}'.format(sum(nonSliding))))
-
-    print("[%s] Genomic bins used for training: %s" % (timestamp(), '{:,}'.format(mat[trainingBin, :].shape[0])))
-    print("[%s] Genomic bins used for testing: %s" % (timestamp(), '{:,}'.format(mat[testingBin, :].shape[0])))
+    print("[%s] Total genomic bins used for training: %s" % (timestamp(), '{:,}'.format(mat[trainingBin, :].shape[0])))
+    print("[%s] Total genomic bins used for testing: %s" % (timestamp(), '{:,}'.format(mat[testingBin, :].shape[0])))
 
     ### mode 2 uses "input" as offset variable
     if int(mode) == 2:
@@ -551,8 +555,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
         ### re-estimate beta with theta
         # print("[%s] Re-estimate of beta" % (timestamp()))
-        model = smf.glm(formula, data=df, family=sm.families.NegativeBinomial(alpha=1 / th0),
-                        offset=np.log(df["exposure"])).fit(start_params=model0.params)
+        model = smf.glm(formula, data=df, family=sm.families.NegativeBinomial(alpha=1 / th0), offset=np.log(df["exposure"])).fit(start_params=model0.params)
         # print model.summary()
 
         ### Re-estimate theta
@@ -589,8 +592,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
         ### re-estimate beta with theta
         # print("[%s] Re-estimate of beta" % (timestamp()))
-        model = smf.glm(formula, data=df, family=sm.families.NegativeBinomial(alpha=1 / th0)).fit(
-            start_params=model0.params)
+        model = smf.glm(formula, data=df, family=sm.families.NegativeBinomial(alpha=1 / th0)).fit(start_params=model0.params)
         # print model.summary()
 
         ### Re-estimate theta
@@ -621,9 +623,8 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
                 if qval[i] <= float(threshold):
-                    out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (
-                        bin.strip(), fc[testingBin][i], mat[testingBin, 1][i], mat[testingBin, 0][i], pval[i],
-                        qval[i]))  ### chr, start, end, foldChg, inputCt, outputCt, pval, qval
+                    ### chr, start, end, foldChg, inputCt, outputCt, pval, qval
+                    out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (bin.strip(), fc[testingBin][i], mat[testingBin, 1][i], mat[testingBin, 0][i], pval[i], qval[i]))
 
     ### generate various bdg tracks
     print("[%s] Generating bedGraph files" % (timestamp()))
@@ -681,8 +682,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     ### merge centered peak
     print("[%s] Merge & finalize peaks" % (timestamp()))
     pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 5, 6, 7, 8],
-                                                            o=["max", "max", "max", "min", "min"]).saveas(
-        prefix + ".peak.final.bed")
+                                                            o=["max", "max", "max", "min", "min"]).saveas(prefix + ".peak.final.bed")
 
     ### remove intermediate peak file
     safe_remove(prefix + ".peak.centered.bed")

@@ -22,8 +22,8 @@ parser.add_argument('-i', '--input', help='STARR-seq Input BAM File', required=T
 parser.add_argument('-o', '--output', help='STARR-seq Output BAM File', required=True)
 
 ### optional args
-parser.add_argument('--min', help='Minimum Insert Size', required=False, default=200)
-parser.add_argument('--max', help='Maximum Insert Size', required=False, default=1000)
+parser.add_argument('--min', help='Minimum Insert Size', required=False, type=int, default=200)
+parser.add_argument('--max', help='Maximum Insert Size', required=False, type=int, default=1000)
 
 args = parser.parse_args()
 
