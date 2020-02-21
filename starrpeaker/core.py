@@ -128,6 +128,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=
         fileOut: output file
         minSize: minimum size of fragment insert to consider
         maxSize: maximum size of fragment insert to consider
+        readStart: count at start positions of reads
 
     Returns:
         writes bin count output file
@@ -311,8 +312,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=
         ### save genome coverage
         print("[%s] Making genome coverage bedGraph" % (timestamp()))
         binSize = int(a[0][2]) - int(a[0][1])
-        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(
-            fileOut + "." + str(j) + ".all.bdg")
+        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + str(j) + ".all.bdg")
 
         ### delete tmp merged bed files
         safe_remove("tmp" + uid + str(j) + "all.sorted.merged.bed")
@@ -320,8 +320,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=
 
         ### convert bedGraph to bigWig
         print("[%s] Converting bedGraph to bigWig" % (timestamp()))
-        bdg2bw(bdgFile=fileOut + "." + str(j) + ".all.bdg", bwFile=fileOut + "." + str(j) + ".all.bw",
-               chromSize=chromSize)
+        bdg2bw(bdgFile=fileOut + "." + str(j) + ".all.bdg", bwFile=fileOut + "." + str(j) + ".all.bw", chromSize=chromSize)
         safe_remove(fileOut + "." + str(j) + ".all.bdg")
 
         ### merge FWD bed
@@ -344,8 +343,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=
         ### save genome coverage
         print("[%s] Making genome coverage bedGraph" % (timestamp()))
         binSize = int(a[0][2]) - int(a[0][1])
-        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(
-            fileOut + "." + str(j) + ".fwd.bdg")
+        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + str(j) + ".fwd.bdg")
 
         ### delete tmp merged bed files
         safe_remove("tmp" + uid + str(j) + "fwd.sorted.merged.bed")
@@ -353,8 +351,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=
 
         ### convert bedGraph to bigWig
         print("[%s] Converting bedGraph to bigWig" % (timestamp()))
-        bdg2bw(bdgFile=fileOut + "." + str(j) + ".fwd.bdg", bwFile=fileOut + "." + str(j) + ".fwd.bw",
-               chromSize=chromSize)
+        bdg2bw(bdgFile=fileOut + "." + str(j) + ".fwd.bdg", bwFile=fileOut + "." + str(j) + ".fwd.bw", chromSize=chromSize)
         safe_remove(fileOut + "." + str(j) + ".fwd.bdg")
 
         ### merge REV bed
@@ -377,8 +374,7 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=
         ### save genome coverage
         print("[%s] Making genome coverage bedGraph" % (timestamp()))
         binSize = int(a[0][2]) - int(a[0][1])
-        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(
-            fileOut + "." + str(j) + ".rev.bdg")
+        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + str(j) + ".rev.bdg")
 
         ### delete tmp merged bed files
         safe_remove("tmp" + uid + str(j) + "rev.sorted.merged.bed")
@@ -386,14 +382,12 @@ def proc_bam(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=
 
         ### convert bedGraph to bigWig
         print("[%s] Converting bedGraph to bigWig" % (timestamp()))
-        bdg2bw(bdgFile=fileOut + "." + str(j) + ".rev.bdg", bwFile=fileOut + "." + str(j) + ".rev.bw",
-               chromSize=chromSize)
+        bdg2bw(bdgFile=fileOut + "." + str(j) + ".rev.bdg", bwFile=fileOut + "." + str(j) + ".rev.bw", chromSize=chromSize)
         safe_remove(fileOut + "." + str(j) + ".rev.bdg")
 
     ### normalize input count, normalized input count is added to additional column
     normalized_input = mat[:, 0] * (tct[1] / tct[0])
-    np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%i %i %.5f',
-               delimiter="\t")
+    np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%i %i %.5f', delimiter="\t")
 
     del a, mat, tct, normalized_input
     print("[%s] Done" % (timestamp()))
@@ -523,9 +517,6 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     print("[%s] Total genomic bins: %s" % (timestamp(), '{:,}'.format(mat.shape[0])))
     print("[%s] Total non-overlapping genomic bins: %s" % (timestamp(), '{:,}'.format(sum(nonSliding))))
 
-    # print("[%s] Genomic bins with insufficient input coverage: %s" % (timestamp(), '{:,}'.format(sum(np.invert((bct_i > minInput))))))
-    # print("[%s] Genomic bins with sufficient input coverage: %s" % (timestamp(), '{:,}'.format(sum((bct_i > minInput)))))
-
     print("[%s] Removing bins with input counts larger than %s for training and testing" % (timestamp(), '{:,}'.format(maxInput)))
     print("[%s] Removing bins with output counts larger than %s for training" % (timestamp(), '{:,}'.format(maxOutput)))
 
@@ -535,6 +526,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     ### mode 2 uses "input" as offset variable
     if int(mode) == 2:
         print("[%s] Running Mode 2" % (timestamp()))
+
         ### remove input
         mat_model = np.delete(mat, 1, 1)
 
@@ -571,9 +563,9 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
     ### mode 1 uses "input" as covariate (default):
     else:
         print("[%s] Running Mode 1" % (timestamp()))
+
         ### remove normalized input
         mat_model = np.delete(mat, 2, 1)
-        # mat = np.delete(mat, 2, 1)
 
         ### formula
         x = ["x" + str(i) for i in range(1, mat_model.shape[1])]
@@ -634,8 +626,7 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
                 fp.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
                 fq.write("%s\t%.3f\n" % (bin.strip(), abs(q_score[i])))
 
-    with open(prefix + ".output.bdg", "w") as fo, open(prefix + ".input.bdg", "w") as fi, open(
-            prefix + ".norm-input.bdg", "w") as fn, open(prefix + ".fc.bdg", "w") as ff:
+    with open(prefix + ".output.bdg", "w") as fo, open(prefix + ".input.bdg", "w") as fi, open(prefix + ".norm-input.bdg", "w") as fn, open(prefix + ".fc.bdg", "w") as ff:
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(bed.readlines()):
                 fo.write("%s\t%.3f\n" % (bin.strip(), mat[i, 0]))
@@ -675,14 +666,11 @@ def call_peak(prefix, bedFile, bctFile, covFile, bwFile, chromSize, threshold, m
 
     ### center peak
     print("[%s] Center peaks" % (timestamp()))
-    center_peak(bwFile=bwFile,
-                peakFile=prefix + ".peak.bed",
-                centeredPeakFile=prefix + ".peak.centered.bed")
+    center_peak(bwFile=bwFile, peakFile=prefix + ".peak.bed", centeredPeakFile=prefix + ".peak.centered.bed")
 
     ### merge centered peak
     print("[%s] Merge & finalize peaks" % (timestamp()))
-    pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 5, 6, 7, 8],
-                                                            o=["max", "max", "max", "min", "min"]).saveas(prefix + ".peak.final.bed")
+    pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 5, 6, 7, 8], o=["max", "max", "max", "min", "min"]).saveas(prefix + ".peak.final.bed")
 
     ### remove intermediate peak file
     safe_remove(prefix + ".peak.centered.bed")
@@ -705,8 +693,7 @@ def bdg2bw(bdgFile, bwFile, chromSize, window=None, step=None):
                 if len(line.strip().split("\t")) == 4:
                     chr, start, end, val = line.strip().split("\t")
                     if (int(end) - int(start)) == window:
-                        bw.addEntries(chroms=[chr], starts=[(int(end) - int(window / 2) - int(step / 2))],
-                                      ends=[(int(end) - int(window / 2) + int(step / 2))], values=[float(val)])
+                        bw.addEntries(chroms=[chr], starts=[(int(end) - int(window / 2) - int(step / 2))], ends=[(int(end) - int(window / 2) + int(step / 2))], values=[float(val)])
                 else:
                     print("[%s] Warning: skipping bedGraph entry: %s" % (timestamp(), line.strip()))
 
