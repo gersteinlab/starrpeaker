@@ -20,16 +20,36 @@ parser.add_argument('--prefix', help='Output File Prefix', required=True)
 parser.add_argument('--chromsize', help='Chrom Sizes', required=True)
 
 ### optional args
-parser.add_argument('--threshold', help='Adjusted P-value Threshold', required=False, default=0.05)
-parser.add_argument('--mode', help='Mode', required=False, default=1)
+parser.add_argument('--bed', help='BED File', required=False)
+parser.add_argument('--bct', help='BCT File', required=False)
+parser.add_argument('--cov', help='Covariate File', required=False)
+parser.add_argument('--bw', help='BigWig File of STARR-seq Coverage', required=False)
+parser.add_argument('--threshold', help='Adjusted P-value Threshold', required=False, type=float, default=0.05)
+parser.add_argument('--mode', help='Mode', required=False, type=int, default=1)
+parser.add_argument('--mincov', help='Minimum Coverage', required=False, type=int, default=10)
+parser.add_argument('--eq', help='Extreme Quantile to Remove', required=False, type=float, default=1e-5)
 
 args = parser.parse_args()
 
+if args.bed is None:
+    args.bed = args.prefix + ".bin.bed"
+
+if args.bct is None:
+    args.bct = args.prefix + ".bam.bct"
+
+if args.cov is None:
+    args.cov = args.prefix + ".cov.tsv"
+
+if args.bw is None:
+    args.bw = args.prefix + ".bam.bct.1.all.bw"
+
 if __name__ == "__main__": core.call_peak(prefix=args.prefix,
-                                          bedFile=args.prefix + ".bin.bed",
-                                          bctFile=args.prefix + ".bam.bct",
-                                          covFile=args.prefix + ".cov.tsv",
-                                          bwFile=args.prefix + ".bam.bct.1.all.bw",
+                                          bedFile=args.bed,
+                                          bctFile=args.bct,
+                                          covFile=args.cov,
+                                          bwFile=args.bw,
                                           chromSize=args.chromsize,
                                           threshold=args.threshold,
-                                          mode=args.mode)
+                                          mode=args.mode,
+                                          minCoverage=args.mincov,
+                                          extQuantile=args.eq)
