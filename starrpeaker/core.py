@@ -439,8 +439,6 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
         template_count_used_fwd = 0
         template_count_used_rev = 0
 
-        ###
-
         for chr in list_chr(chromSize):
 
             print("[%s] Processing %s" % (timestamp(), chr))
@@ -510,6 +508,8 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
 
                         else:
                             r_cache[rid] = read
+
+        del r_cache
 
         tct[j] += template_count_used_all
 
@@ -956,6 +956,9 @@ def center_peak(bwFile, peakFile, centeredPeakFile):
                 center = int((summit[0, 0] + summit[-1, 1]) / 2)
                 out.write('\t'.join(
                     [chr, str(center - radius), str(center + radius), other]) + '\n')
+
+    del peak
+    bw.close()
 
 
 def proc_fenergy(bedFile, fileOut, linearfold, genome):
