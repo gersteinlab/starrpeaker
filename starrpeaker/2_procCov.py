@@ -22,6 +22,6 @@ parser.add_argument('--cov', help='BigWig Files as Covariates', nargs='+', requi
 
 args = parser.parse_args()
 
-if __name__ == "__main__": core.proc_cov(bwFiles=args.cov,
+if __name__ == "__main__": core.proc_cov(prefix=args.prefix,
                                          bedFile=args.prefix + ".bin.bed",
-                                         fileOut=args.prefix + ".cov.tsv")
+                                         bwFiles=args.cov)
