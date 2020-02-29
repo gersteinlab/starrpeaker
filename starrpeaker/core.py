@@ -547,8 +547,7 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
                         if line.strip().split('\t')[5] == "+":
                             frag_tmp.write(line)
             pybedtools.BedTool(prefix + "." + bamidx[j] + ".frag.tmp.bed").sort().saveas(prefix + "." + bamidx[j] + ".frag.sorted.bed")
-            safe_remove(prefix + "." + bamidx[j] + ".frag.bed")
-            safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
+            # safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
 
         elif strand.lower() == "rev":
             print("[%s] Counting fragments mapped to reverse strand only" % (timestamp()))
@@ -558,13 +557,13 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
                         if line.strip().split('\t')[5] == "-":
                             frag_tmp.write(line)
             pybedtools.BedTool(prefix + "." + bamidx[j] + ".frag.tmp.bed").sort().saveas(prefix + "." + bamidx[j] + ".frag.sorted.bed")
-            safe_remove(prefix + "." + bamidx[j] + ".frag.bed")
-            safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
+            # safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
 
         else:
             print("[%s] Counting fragments mapped to both forward and reverse strand" % (timestamp()))
             pybedtools.BedTool(prefix + "." + bamidx[j] + ".frag.bed").sort().saveas(prefix + "." + bamidx[j] + ".frag.sorted.bed")
-            safe_remove(prefix + "." + bamidx[j] + ".frag.bed")
+
+        # safe_remove(prefix + "." + bamidx[j] + ".frag.bed")
 
         ### save genome coverage
         print("[%s] Making genome coverage bedGraph" % (timestamp()))
@@ -574,7 +573,7 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
         ### convert bedGraph to bigWig
         print("[%s] Converting bedGraph to bigWig" % (timestamp()))
         bdg2bw(bdgFile=prefix + "." + bamidx[j] + ".bdg", bwFile=prefix + "." + bamidx[j] + ".bw", chromSize=chromSize)
-        safe_remove(prefix + "." + bamidx[j] + ".bdg")
+        # safe_remove(prefix + "." + bamidx[j] + ".bdg")
 
         if readStart:
             ### calculate read start position
@@ -604,8 +603,8 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
         mat[:, j] = np.array([int(l.split("\t")[3]) for l in str(readDepth).rstrip("\n").split("\n")])
 
         ### clean up
-        safe_remove(prefix + "." + bamidx[j] + ".frag.sorted.bed")
-        safe_remove(prefix + "." + bamidx[j] + ".bpCount.bed")
+        # safe_remove(prefix + "." + bamidx[j] + ".frag.sorted.bed")
+        # safe_remove(prefix + "." + bamidx[j] + ".bpCount.bed")
         del mergedBed, bpCountBed, readDepth
 
     ### normalize input count, normalized input count is added to additional column
