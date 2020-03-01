@@ -25,14 +25,11 @@ parser.add_argument('-o', '--output', help='STARR-seq BAM File', required=True)
 ### optional args
 parser.add_argument('--length', help='Bin Length', required=False, type=int, default=500)
 parser.add_argument('--step', help='Step Size', required=False, type=int, default=100)
-
 parser.add_argument('--cov', help='Covariate BigWig Files', nargs='+', required=False)
-
 parser.add_argument('--min', help='Minimum Template Size', required=False, type=int, default=200)
 parser.add_argument('--max', help='Maximum Template Size', required=False, type=int, default=1000)
 parser.add_argument('--readstart', help='Use Read Start Position instead of Fragment Center', required=False, type=bool, default=False)
 parser.add_argument('--strand', help='Use all/fwd/rev Stranded Fragments', required=False, type=str, default="all")
-
 parser.add_argument('--threshold', help='Adjusted P-value Threshold', required=False, type=float, default=0.05)
 parser.add_argument('--mode', help='Mode', required=False, type=int, default=1)
 parser.add_argument('--mincov', help='Minimum Coverage', required=False, type=int, default=10)

@@ -18,6 +18,7 @@ parser = argparse.ArgumentParser(description='Process BAM File(s)')
 ### required args
 parser.add_argument('--prefix', help='Output File Prefix', required=True)
 parser.add_argument('--chromsize', help='Chrom Sizes', required=True)
+parser.add_argument('--bed', help='BED File', required=True)
 parser.add_argument('-i', '--input', help='STARR-seq DNA Input BAM File', required=True)
 parser.add_argument('-o', '--output', help='STARR-seq RNA Output BAM File', required=True)
 
@@ -31,7 +32,7 @@ args = parser.parse_args()
 
 if __name__ == "__main__": core.proc_bam(prefix=args.prefix,
                                          chromSize=args.chromsize,
-                                         bedFile=args.prefix + ".bin.bed",
+                                         bedFile=args.bed,
                                          bamFiles=[args.input, args.output],
                                          minSize=args.min,
                                          maxSize=args.max,

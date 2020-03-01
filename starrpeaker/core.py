@@ -24,6 +24,7 @@ from itertools import compress
 import subprocess
 import multiprocessing
 from sklearn import preprocessing
+from subprocess import call
 
 
 # from functools import reduce
@@ -37,6 +38,9 @@ def safe_remove(file):
     if os.path.exists(file):
         os.remove(file)
 
+
+def safe_bedsort(input, output):
+    call("sort -k1,1 -k2,2n " + input + " > " + output, shell=True)
 
 def get_uid():
     return str(uuid.uuid4())[:8]
@@ -116,280 +120,6 @@ def count_total_proper_templates(bam, minSize, maxSize):
                         proper_template_count += 1
     b.close()
     return proper_template_count
-
-
-def proc_bam_legacy(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=False):
-    '''
-
-    Args:
-        bamFiles: list of BAM files eg. [input.bam output.bam]
-        bedFile: bin BED file
-        chromSize: chrom size file
-        fileOut: output file
-        minSize: minimum size of fragment insert to consider
-        maxSize: maximum size of fragment insert to consider
-        readStart: count at start positions of reads
-
-    Returns:
-        writes bin count output file
-
-    '''
-    print("[%s] Counting template depth per bin %s" % (timestamp(), bedFile))
-
-    ### initialize numpy array
-    tct = np.zeros(shape=(len(bamFiles)), dtype=int)
-    mat = np.zeros(shape=(sum(1 for l in open(bedFile)), len(bamFiles)), dtype=int)
-
-    ### random unique ID
-    uid = get_uid()
-
-    ### load bin bed file
-    a = pybedtools.BedTool(bedFile)
-
-    bamidx = {0: "input", 1: "output"}
-
-    for j, bam in enumerate(bamFiles):
-        print("[%s] Processing %s" % (timestamp(), bam))
-
-        if not os.path.exists(bam + ".bai"):
-            print("[%s] (Warning) Index not found: %s" % (timestamp(), bam))
-            print("[%s] Indexing %s" % (timestamp(), bam))
-            pysam.index(bam)
-
-        b = pysam.AlignmentFile(bam, "rb")
-
-        template_count_all = 0
-        template_count_fwd = 0
-        template_count_rev = 0
-        template_count_used_all = 0
-        template_count_used_fwd = 0
-        template_count_used_rev = 0
-
-        ###
-
-        for chr in list_chr(chromSize):
-
-            print("[%s] Processing %s" % (timestamp(), chr))
-
-            with open("tmp" + uid + bamidx[j] + chr + "all.bed", "w") as s, open("tmp" + uid + bamidx[j] + chr + "fwd.bed", "w") as s_fwd, open("tmp" + uid + bamidx[j] + chr + "rev.bed",
-                                                                                                                                                "w") as s_rev:
-                r_cache = {}
-                for read in b.fetch(reference=chr):
-
-                    rid = read.query_name
-                    # r_c = b.get_reference_name(read.reference_id)
-
-                    ### read is NOT duplicated
-                    ### read IS first in pair
-                    ### read IS "properly paired" (read is mapped to forward strand, mate is mapped to reverse strand, and vice versa)
-                    ### read is NOT chimeric read (i.e., no SA tag)
-                    ### IF read has SA tag (SA: secondary alignment), read is ambiguous, and thus discard
-                    if not read.is_duplicate and read.is_proper_pair and not read.has_tag("SA"):
-
-                        if rid in r_cache:
-                            template_count_all += 1
-
-                            if readStart:
-                                if read.is_read2:
-                                    read1 = r_cache[rid]
-                                    read2 = read
-                                else:
-                                    read1 = read
-                                    read2 = r_cache[rid]
-
-                                r1_s = read1.reference_start
-                                r1_e = read1.reference_end
-                                r1_l = read1.template_length
-
-                                r2_s = read2.reference_start
-                                r2_e = read2.reference_end
-                                r2_l = read2.template_length
-
-                                if read2.is_reverse:  ### read1 FWD read2 REV
-                                    template_count_fwd += 1
-
-                                    if int(minSize) <= r1_l and int(maxSize) >= r1_l:
-                                        template_count_used_all += 1
-                                        template_count_used_fwd += 1
-                                        s.write("%s\t%i\t%i\n" % (chr, r1_s, (r1_s + 1)))
-                                        s.write("%s\t%i\t%i\n" % (chr, (r2_e - 1), r2_e))
-                                        s_fwd.write("%s\t%i\t%i\n" % (chr, r1_s, (r1_s + 1)))
-                                        s_rev.write("%s\t%i\t%i\n" % (chr, (r2_e - 1), r2_e))
-
-                                elif read1.is_reverse:  ### read1 REV read2 FWD
-                                    template_count_rev += 1
-
-                                    if int(minSize) <= r2_l and int(maxSize) >= r2_l:
-                                        template_count_used_all += 1
-                                        template_count_used_rev += 1
-
-                                        s.write("%s\t%i\t%i\n" % (chr, r2_s, (r2_s + 1)))
-                                        s.write("%s\t%i\t%i\n" % (chr, (r1_e - 1), r1_e))
-
-                                        s_fwd.write("%s\t%i\t%i\n" % (chr, r2_s, (r2_s + 1)))
-                                        s_rev.write("%s\t%i\t%i\n" % (chr, (r1_e - 1), r1_e))
-
-                            else:
-                                if read.is_read2:
-                                    read = r_cache[rid]
-
-                                del r_cache[rid]
-
-                                r_s = read.reference_start
-                                r_e = read.reference_end
-                                r_l = read.template_length
-
-                                if not read.is_reverse and read.mate_is_reverse:
-                                    template_count_fwd += 1
-
-                                    if int(minSize) <= r_l and int(maxSize) >= r_l:
-                                        template_count_used_all += 1
-                                        template_count_used_fwd += 1
-                                        s.write("%s\t%i\t%i\n" % (chr, (r_s + int(r_l / 2)), (r_s + int(r_l / 2) + 1)))
-                                        s_fwd.write(
-                                            "%s\t%i\t%i\n" % (chr, (r_s + int(r_l / 2)), (r_s + int(r_l / 2) + 1)))
-
-                                elif read.is_reverse and not read.mate_is_reverse:
-                                    template_count_rev += 1
-
-                                    if int(minSize) <= -(r_l) and int(maxSize) >= -(r_l):
-                                        template_count_used_all += 1
-                                        template_count_used_rev += 1
-                                        s.write("%s\t%i\t%i\n" % (chr, (r_e + int(r_l / 2) - 1), (r_e + int(r_l / 2))))
-                                        s_rev.write(
-                                            "%s\t%i\t%i\n" % (chr, (r_e + int(r_l / 2) - 1), (r_e + int(r_l / 2))))
-                        else:
-                            r_cache[rid] = read
-
-            print("[%s] Sorting %s" % (timestamp(), chr))
-            pybedtools.BedTool("tmp" + uid + bamidx[j] + chr + "all.bed").sort().saveas("tmp" + uid + bamidx[j] + chr + "all.sorted.bed")
-            pybedtools.BedTool("tmp" + uid + bamidx[j] + chr + "fwd.bed").sort().saveas("tmp" + uid + bamidx[j] + chr + "fwd.sorted.bed")
-            pybedtools.BedTool("tmp" + uid + bamidx[j] + chr + "rev.bed").sort().saveas("tmp" + uid + bamidx[j] + chr + "rev.sorted.bed")
-
-            ### delete bed
-            safe_remove("tmp" + uid + bamidx[j] + chr + "all.bed")
-            safe_remove("tmp" + uid + bamidx[j] + chr + "fwd.bed")
-            safe_remove("tmp" + uid + bamidx[j] + chr + "rev.bed")
-
-        ###
-
-        tct[j] += template_count_used_all
-
-        print("[%s] %s mapped reads" % (timestamp(), '{:,}'.format(b.mapped)))
-        print("[%s] %s templates extracted" % (timestamp(), '{:,}'.format(template_count_all)))
-        print("[%s] %s templates extracted (+)" % (timestamp(), '{:,}'.format(template_count_fwd)))
-        print("[%s] %s templates extracted (-)" % (timestamp(), '{:,}'.format(template_count_rev)))
-
-        print("[%s] %s templates used for count" % (timestamp(), '{:,}'.format(template_count_used_all)))
-        print("[%s] %s templates used for count (+)" % (timestamp(), '{:,}'.format(template_count_used_fwd)))
-        print("[%s] %s templates used for count (-)" % (timestamp(), '{:,}'.format(template_count_used_rev)))
-
-        b.close()
-
-        ############################## merge ALL bed ##############################
-        print("[%s] Merging ALL BED files" % (timestamp()))
-        with open("tmp" + uid + bamidx[j] + "all.sorted.merged.bed", "a") as merged:
-            for chr in list_chr(chromSize):
-
-                ### merge tmp bed files
-                with open("tmp" + uid + bamidx[j] + chr + "all.sorted.bed", "r") as t:
-                    if t.read(1).strip():
-                        t.seek(0)
-                        merged.write(t.read())
-
-                ### delete tmp bed files
-                safe_remove("tmp" + uid + bamidx[j] + chr + "all.sorted.bed")
-
-        print("[%s] Counting depth per bin" % (timestamp()))
-        mergedBed = pybedtools.BedTool("tmp" + uid + bamidx[j] + "all.sorted.merged.bed")
-        readDepth = a.coverage(mergedBed, sorted=True, counts=True)
-
-        ### extract 4th column, which is read counts, and assign as numpy array
-        mat[:, j] = np.array([int(l.split("\t")[3]) for l in str(readDepth).rstrip("\n").split("\n")])
-
-        ### save genome coverage
-        print("[%s] Making genome coverage bedGraph" % (timestamp()))
-        binSize = int(a[0][2]) - int(a[0][1])
-        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + bamidx[j] + ".all.bdg")
-
-        ### delete tmp merged bed files
-        safe_remove("tmp" + uid + bamidx[j] + "all.sorted.merged.bed")
-        del merged, mergedBed, readDepth
-
-        ### convert bedGraph to bigWig
-        print("[%s] Converting bedGraph to bigWig" % (timestamp()))
-        bdg2bw(bdgFile=fileOut + "." + bamidx[j] + ".all.bdg", bwFile=fileOut + "." + bamidx[j] + ".bw", chromSize=chromSize)
-        safe_remove(fileOut + "." + bamidx[j] + ".all.bdg")
-
-        ############################## merge FWD bed ##############################
-        print("[%s] Merging FWD BED files" % (timestamp()))
-        with open("tmp" + uid + bamidx[j] + "fwd.sorted.merged.bed", "a") as merged:
-            for chr in list_chr(chromSize):
-
-                ### merge tmp bed files
-                with open("tmp" + uid + bamidx[j] + chr + "fwd.sorted.bed", "r") as t:
-                    if t.read(1).strip():
-                        t.seek(0)
-                        merged.write(t.read())
-
-                ### delete tmp bed files
-                safe_remove("tmp" + uid + bamidx[j] + chr + "fwd.sorted.bed")
-
-        print("[%s] Counting depth per bin" % (timestamp()))
-        mergedBed = pybedtools.BedTool("tmp" + uid + bamidx[j] + "fwd.sorted.merged.bed")
-
-        ### save genome coverage
-        print("[%s] Making genome coverage bedGraph" % (timestamp()))
-        binSize = int(a[0][2]) - int(a[0][1])
-        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + bamidx[j] + ".fwd.bdg")
-
-        ### delete tmp merged bed files
-        safe_remove("tmp" + uid + bamidx[j] + "fwd.sorted.merged.bed")
-        del merged, mergedBed
-
-        ### convert bedGraph to bigWig
-        print("[%s] Converting bedGraph to bigWig" % (timestamp()))
-        bdg2bw(bdgFile=fileOut + "." + bamidx[j] + ".fwd.bdg", bwFile=fileOut + "." + bamidx[j] + ".fwd.bw", chromSize=chromSize)
-        safe_remove(fileOut + "." + bamidx[j] + ".fwd.bdg")
-
-        ############################## merge REV bed ##############################
-        print("[%s] Merging REV BED files" % (timestamp()))
-        with open("tmp" + uid + bamidx[j] + "rev.sorted.merged.bed", "a") as merged:
-            for chr in list_chr(chromSize):
-
-                ### merge tmp bed files
-                with open("tmp" + uid + bamidx[j] + chr + "rev.sorted.bed", "r") as t:
-                    if t.read(1).strip():
-                        t.seek(0)
-                        merged.write(t.read())
-
-                ### delete tmp bed files
-                safe_remove("tmp" + uid + bamidx[j] + chr + "rev.sorted.bed")
-
-        print("[%s] Counting depth per bin" % (timestamp()))
-        mergedBed = pybedtools.BedTool("tmp" + uid + bamidx[j] + "rev.sorted.merged.bed")
-
-        ### save genome coverage
-        print("[%s] Making genome coverage bedGraph" % (timestamp()))
-        binSize = int(a[0][2]) - int(a[0][1])
-        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + bamidx[j] + ".rev.bdg")
-
-        ### delete tmp merged bed files
-        safe_remove("tmp" + uid + bamidx[j] + "rev.sorted.merged.bed")
-        del merged, mergedBed
-
-        ### convert bedGraph to bigWig
-        print("[%s] Converting bedGraph to bigWig" % (timestamp()))
-        bdg2bw(bdgFile=fileOut + "." + bamidx[j] + ".rev.bdg", bwFile=fileOut + "." + bamidx[j] + ".rev.bw", chromSize=chromSize)
-        safe_remove(fileOut + "." + bamidx[j] + ".rev.bdg")
-
-    ### normalize input count, normalized input count is added to additional column
-    print("[%s] Normalizing factor for input: %f" % (timestamp(), (tct[1] / tct[0])))
-    normalized_input = mat[:, 0] * (tct[1] / tct[0])
-    np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%i %i %.5f', delimiter="\t")
-
-    del a, mat, tct, normalized_input
-    print("[%s] Done" % (timestamp()))
 
 
 def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, readStart=False, strand="all"):
@@ -489,7 +219,7 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
                                         else:
                                             template_count_used_all += 1
                                             template_count_used_fwd += 1
-                                            s.write("%s\t%i\t%i\t.\t.\t%s\n" % (chr, r1_s, r2_e, "+"))
+                                            s.write("%s\t%i\t%i\t%s\t.\t%s\n" % (chr, r1_s, r2_e, rid, "+"))
 
 
                                 elif read1.is_reverse and not read2.is_reverse:  ### read1 REV read2 FWD
@@ -501,7 +231,7 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
                                         else:
                                             template_count_used_all += 1
                                             template_count_used_rev += 1
-                                            s.write("%s\t%i\t%i\t.\t.\t%s\n" % (chr, r2_s, r1_e, "-"))
+                                            s.write("%s\t%i\t%i\t%s\t.\t%s\n" % (chr, r2_s, r1_e,rid,  "-"))
 
                             else:
                                 print("[%s] (Warning) read pair mapped to different chromosomes: %s" % (timestamp(), rid))
@@ -546,8 +276,8 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
                     for line in frag.readlines():
                         if line.strip().split('\t')[5] == "+":
                             frag_tmp.write(line)
-            pybedtools.BedTool(prefix + "." + bamidx[j] + ".frag.tmp.bed").sort().saveas(prefix + "." + bamidx[j] + ".frag.sorted.bed")
-            # safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
+            safe_bedsort(prefix + "." + bamidx[j] + ".frag.tmp.bed",prefix + "." + bamidx[j] + ".frag.sorted.bed")
+            safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
 
         elif strand.lower() == "rev":
             print("[%s] Counting fragments mapped to reverse strand only" % (timestamp()))
@@ -556,14 +286,14 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
                     for line in frag.readlines():
                         if line.strip().split('\t')[5] == "-":
                             frag_tmp.write(line)
-            pybedtools.BedTool(prefix + "." + bamidx[j] + ".frag.tmp.bed").sort().saveas(prefix + "." + bamidx[j] + ".frag.sorted.bed")
-            # safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
+            safe_bedsort(prefix + "." + bamidx[j] + ".frag.tmp.bed", prefix + "." + bamidx[j] + ".frag.sorted.bed")
+            safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
 
         else:
             print("[%s] Counting fragments mapped to both forward and reverse strand" % (timestamp()))
-            pybedtools.BedTool(prefix + "." + bamidx[j] + ".frag.bed").sort().saveas(prefix + "." + bamidx[j] + ".frag.sorted.bed")
+            safe_bedsort(prefix + "." + bamidx[j] + ".frag.bed", prefix + "." + bamidx[j] + ".frag.sorted.bed")
 
-        # safe_remove(prefix + "." + bamidx[j] + ".frag.bed")
+        safe_remove(prefix + "." + bamidx[j] + ".frag.bed")
 
         ### save genome coverage
         print("[%s] Making genome coverage bedGraph" % (timestamp()))
@@ -573,7 +303,7 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
         ### convert bedGraph to bigWig
         print("[%s] Converting bedGraph to bigWig" % (timestamp()))
         bdg2bw(bdgFile=prefix + "." + bamidx[j] + ".bdg", bwFile=prefix + "." + bamidx[j] + ".bw", chromSize=chromSize)
-        # safe_remove(prefix + "." + bamidx[j] + ".bdg")
+        safe_remove(prefix + "." + bamidx[j] + ".bdg")
 
         if readStart:
             ### calculate read start position
@@ -603,8 +333,7 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
         mat[:, j] = np.array([int(l.split("\t")[3]) for l in str(readDepth).rstrip("\n").split("\n")])
 
         ### clean up
-        # safe_remove(prefix + "." + bamidx[j] + ".frag.sorted.bed")
-        # safe_remove(prefix + "." + bamidx[j] + ".bpCount.bed")
+        safe_remove(prefix + "." + bamidx[j] + ".bpCount.bed")
         del mergedBed, bpCountBed, readDepth
 
     ### normalize input count, normalized input count is added to additional column
@@ -1065,3 +794,276 @@ def split_bed(bedFile, uid):
         if part:
             part.close()
     return chr_list
+
+def proc_bam_legacy(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=False):
+    '''
+
+    Args:
+        bamFiles: list of BAM files eg. [input.bam output.bam]
+        bedFile: bin BED file
+        chromSize: chrom size file
+        fileOut: output file
+        minSize: minimum size of fragment insert to consider
+        maxSize: maximum size of fragment insert to consider
+        readStart: count at start positions of reads
+
+    Returns:
+        writes bin count output file
+
+    '''
+    print("[%s] Counting template depth per bin %s" % (timestamp(), bedFile))
+
+    ### initialize numpy array
+    tct = np.zeros(shape=(len(bamFiles)), dtype=int)
+    mat = np.zeros(shape=(sum(1 for l in open(bedFile)), len(bamFiles)), dtype=int)
+
+    ### random unique ID
+    uid = get_uid()
+
+    ### load bin bed file
+    a = pybedtools.BedTool(bedFile)
+
+    bamidx = {0: "input", 1: "output"}
+
+    for j, bam in enumerate(bamFiles):
+        print("[%s] Processing %s" % (timestamp(), bam))
+
+        if not os.path.exists(bam + ".bai"):
+            print("[%s] (Warning) Index not found: %s" % (timestamp(), bam))
+            print("[%s] Indexing %s" % (timestamp(), bam))
+            pysam.index(bam)
+
+        b = pysam.AlignmentFile(bam, "rb")
+
+        template_count_all = 0
+        template_count_fwd = 0
+        template_count_rev = 0
+        template_count_used_all = 0
+        template_count_used_fwd = 0
+        template_count_used_rev = 0
+
+        ###
+
+        for chr in list_chr(chromSize):
+
+            print("[%s] Processing %s" % (timestamp(), chr))
+
+            with open("tmp" + uid + bamidx[j] + chr + "all.bed", "w") as s, open("tmp" + uid + bamidx[j] + chr + "fwd.bed", "w") as s_fwd, open("tmp" + uid + bamidx[j] + chr + "rev.bed",
+                                                                                                                                                "w") as s_rev:
+                r_cache = {}
+                for read in b.fetch(reference=chr):
+
+                    rid = read.query_name
+                    # r_c = b.get_reference_name(read.reference_id)
+
+                    ### read is NOT duplicated
+                    ### read IS first in pair
+                    ### read IS "properly paired" (read is mapped to forward strand, mate is mapped to reverse strand, and vice versa)
+                    ### read is NOT chimeric read (i.e., no SA tag)
+                    ### IF read has SA tag (SA: secondary alignment), read is ambiguous, and thus discard
+                    if not read.is_duplicate and read.is_proper_pair and not read.has_tag("SA"):
+
+                        if rid in r_cache:
+                            template_count_all += 1
+
+                            if readStart:
+                                if read.is_read2:
+                                    read1 = r_cache[rid]
+                                    read2 = read
+                                else:
+                                    read1 = read
+                                    read2 = r_cache[rid]
+
+                                r1_s = read1.reference_start
+                                r1_e = read1.reference_end
+                                r1_l = read1.template_length
+
+                                r2_s = read2.reference_start
+                                r2_e = read2.reference_end
+                                r2_l = read2.template_length
+
+                                if read2.is_reverse:  ### read1 FWD read2 REV
+                                    template_count_fwd += 1
+
+                                    if int(minSize) <= r1_l and int(maxSize) >= r1_l:
+                                        template_count_used_all += 1
+                                        template_count_used_fwd += 1
+                                        s.write("%s\t%i\t%i\n" % (chr, r1_s, (r1_s + 1)))
+                                        s.write("%s\t%i\t%i\n" % (chr, (r2_e - 1), r2_e))
+                                        s_fwd.write("%s\t%i\t%i\n" % (chr, r1_s, (r1_s + 1)))
+                                        s_rev.write("%s\t%i\t%i\n" % (chr, (r2_e - 1), r2_e))
+
+                                elif read1.is_reverse:  ### read1 REV read2 FWD
+                                    template_count_rev += 1
+
+                                    if int(minSize) <= r2_l and int(maxSize) >= r2_l:
+                                        template_count_used_all += 1
+                                        template_count_used_rev += 1
+
+                                        s.write("%s\t%i\t%i\n" % (chr, r2_s, (r2_s + 1)))
+                                        s.write("%s\t%i\t%i\n" % (chr, (r1_e - 1), r1_e))
+
+                                        s_fwd.write("%s\t%i\t%i\n" % (chr, r2_s, (r2_s + 1)))
+                                        s_rev.write("%s\t%i\t%i\n" % (chr, (r1_e - 1), r1_e))
+
+                            else:
+                                if read.is_read2:
+                                    read = r_cache[rid]
+
+                                del r_cache[rid]
+
+                                r_s = read.reference_start
+                                r_e = read.reference_end
+                                r_l = read.template_length
+
+                                if not read.is_reverse and read.mate_is_reverse:
+                                    template_count_fwd += 1
+
+                                    if int(minSize) <= r_l and int(maxSize) >= r_l:
+                                        template_count_used_all += 1
+                                        template_count_used_fwd += 1
+                                        s.write("%s\t%i\t%i\n" % (chr, (r_s + int(r_l / 2)), (r_s + int(r_l / 2) + 1)))
+                                        s_fwd.write(
+                                            "%s\t%i\t%i\n" % (chr, (r_s + int(r_l / 2)), (r_s + int(r_l / 2) + 1)))
+
+                                elif read.is_reverse and not read.mate_is_reverse:
+                                    template_count_rev += 1
+
+                                    if int(minSize) <= -(r_l) and int(maxSize) >= -(r_l):
+                                        template_count_used_all += 1
+                                        template_count_used_rev += 1
+                                        s.write("%s\t%i\t%i\n" % (chr, (r_e + int(r_l / 2) - 1), (r_e + int(r_l / 2))))
+                                        s_rev.write(
+                                            "%s\t%i\t%i\n" % (chr, (r_e + int(r_l / 2) - 1), (r_e + int(r_l / 2))))
+                        else:
+                            r_cache[rid] = read
+
+            print("[%s] Sorting %s" % (timestamp(), chr))
+            pybedtools.BedTool("tmp" + uid + bamidx[j] + chr + "all.bed").sort().saveas("tmp" + uid + bamidx[j] + chr + "all.sorted.bed")
+            pybedtools.BedTool("tmp" + uid + bamidx[j] + chr + "fwd.bed").sort().saveas("tmp" + uid + bamidx[j] + chr + "fwd.sorted.bed")
+            pybedtools.BedTool("tmp" + uid + bamidx[j] + chr + "rev.bed").sort().saveas("tmp" + uid + bamidx[j] + chr + "rev.sorted.bed")
+
+            ### delete bed
+            safe_remove("tmp" + uid + bamidx[j] + chr + "all.bed")
+            safe_remove("tmp" + uid + bamidx[j] + chr + "fwd.bed")
+            safe_remove("tmp" + uid + bamidx[j] + chr + "rev.bed")
+
+        ###
+
+        tct[j] += template_count_used_all
+
+        print("[%s] %s mapped reads" % (timestamp(), '{:,}'.format(b.mapped)))
+        print("[%s] %s templates extracted" % (timestamp(), '{:,}'.format(template_count_all)))
+        print("[%s] %s templates extracted (+)" % (timestamp(), '{:,}'.format(template_count_fwd)))
+        print("[%s] %s templates extracted (-)" % (timestamp(), '{:,}'.format(template_count_rev)))
+
+        print("[%s] %s templates used for count" % (timestamp(), '{:,}'.format(template_count_used_all)))
+        print("[%s] %s templates used for count (+)" % (timestamp(), '{:,}'.format(template_count_used_fwd)))
+        print("[%s] %s templates used for count (-)" % (timestamp(), '{:,}'.format(template_count_used_rev)))
+
+        b.close()
+
+        ############################## merge ALL bed ##############################
+        print("[%s] Merging ALL BED files" % (timestamp()))
+        with open("tmp" + uid + bamidx[j] + "all.sorted.merged.bed", "a") as merged:
+            for chr in list_chr(chromSize):
+
+                ### merge tmp bed files
+                with open("tmp" + uid + bamidx[j] + chr + "all.sorted.bed", "r") as t:
+                    if t.read(1).strip():
+                        t.seek(0)
+                        merged.write(t.read())
+
+                ### delete tmp bed files
+                safe_remove("tmp" + uid + bamidx[j] + chr + "all.sorted.bed")
+
+        print("[%s] Counting depth per bin" % (timestamp()))
+        mergedBed = pybedtools.BedTool("tmp" + uid + bamidx[j] + "all.sorted.merged.bed")
+        readDepth = a.coverage(mergedBed, sorted=True, counts=True)
+
+        ### extract 4th column, which is read counts, and assign as numpy array
+        mat[:, j] = np.array([int(l.split("\t")[3]) for l in str(readDepth).rstrip("\n").split("\n")])
+
+        ### save genome coverage
+        print("[%s] Making genome coverage bedGraph" % (timestamp()))
+        binSize = int(a[0][2]) - int(a[0][1])
+        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + bamidx[j] + ".all.bdg")
+
+        ### delete tmp merged bed files
+        safe_remove("tmp" + uid + bamidx[j] + "all.sorted.merged.bed")
+        del merged, mergedBed, readDepth
+
+        ### convert bedGraph to bigWig
+        print("[%s] Converting bedGraph to bigWig" % (timestamp()))
+        bdg2bw(bdgFile=fileOut + "." + bamidx[j] + ".all.bdg", bwFile=fileOut + "." + bamidx[j] + ".bw", chromSize=chromSize)
+        safe_remove(fileOut + "." + bamidx[j] + ".all.bdg")
+
+        ############################## merge FWD bed ##############################
+        print("[%s] Merging FWD BED files" % (timestamp()))
+        with open("tmp" + uid + bamidx[j] + "fwd.sorted.merged.bed", "a") as merged:
+            for chr in list_chr(chromSize):
+
+                ### merge tmp bed files
+                with open("tmp" + uid + bamidx[j] + chr + "fwd.sorted.bed", "r") as t:
+                    if t.read(1).strip():
+                        t.seek(0)
+                        merged.write(t.read())
+
+                ### delete tmp bed files
+                safe_remove("tmp" + uid + bamidx[j] + chr + "fwd.sorted.bed")
+
+        print("[%s] Counting depth per bin" % (timestamp()))
+        mergedBed = pybedtools.BedTool("tmp" + uid + bamidx[j] + "fwd.sorted.merged.bed")
+
+        ### save genome coverage
+        print("[%s] Making genome coverage bedGraph" % (timestamp()))
+        binSize = int(a[0][2]) - int(a[0][1])
+        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + bamidx[j] + ".fwd.bdg")
+
+        ### delete tmp merged bed files
+        safe_remove("tmp" + uid + bamidx[j] + "fwd.sorted.merged.bed")
+        del merged, mergedBed
+
+        ### convert bedGraph to bigWig
+        print("[%s] Converting bedGraph to bigWig" % (timestamp()))
+        bdg2bw(bdgFile=fileOut + "." + bamidx[j] + ".fwd.bdg", bwFile=fileOut + "." + bamidx[j] + ".fwd.bw", chromSize=chromSize)
+        safe_remove(fileOut + "." + bamidx[j] + ".fwd.bdg")
+
+        ############################## merge REV bed ##############################
+        print("[%s] Merging REV BED files" % (timestamp()))
+        with open("tmp" + uid + bamidx[j] + "rev.sorted.merged.bed", "a") as merged:
+            for chr in list_chr(chromSize):
+
+                ### merge tmp bed files
+                with open("tmp" + uid + bamidx[j] + chr + "rev.sorted.bed", "r") as t:
+                    if t.read(1).strip():
+                        t.seek(0)
+                        merged.write(t.read())
+
+                ### delete tmp bed files
+                safe_remove("tmp" + uid + bamidx[j] + chr + "rev.sorted.bed")
+
+        print("[%s] Counting depth per bin" % (timestamp()))
+        mergedBed = pybedtools.BedTool("tmp" + uid + bamidx[j] + "rev.sorted.merged.bed")
+
+        ### save genome coverage
+        print("[%s] Making genome coverage bedGraph" % (timestamp()))
+        binSize = int(a[0][2]) - int(a[0][1])
+        mergedBed.slop(g=chromSize, b=int(binSize / 2)).genome_coverage(bg=True, g=chromSize).saveas(fileOut + "." + bamidx[j] + ".rev.bdg")
+
+        ### delete tmp merged bed files
+        safe_remove("tmp" + uid + bamidx[j] + "rev.sorted.merged.bed")
+        del merged, mergedBed
+
+        ### convert bedGraph to bigWig
+        print("[%s] Converting bedGraph to bigWig" % (timestamp()))
+        bdg2bw(bdgFile=fileOut + "." + bamidx[j] + ".rev.bdg", bwFile=fileOut + "." + bamidx[j] + ".rev.bw", chromSize=chromSize)
+        safe_remove(fileOut + "." + bamidx[j] + ".rev.bdg")
+
+    ### normalize input count, normalized input count is added to additional column
+    print("[%s] Normalizing factor for input: %f" % (timestamp(), (tct[1] / tct[0])))
+    normalized_input = mat[:, 0] * (tct[1] / tct[0])
+    np.savetxt(fileOut, np.concatenate((mat, normalized_input.reshape(-1, 1)), axis=1), fmt='%i %i %.5f', delimiter="\t")
+
+    del a, mat, tct, normalized_input
+    print("[%s] Done" % (timestamp()))
