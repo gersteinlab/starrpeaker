@@ -21,10 +21,9 @@ import statsmodels.api as sm
 import statsmodels.stats.multitest as multi
 import os, uuid, datetime
 from itertools import compress
-import subprocess
-import multiprocessing
+from subprocess import check_output, call
+from multiprocessing import Pool, cpu_count
 from sklearn import preprocessing
-from subprocess import call
 
 
 # from functools import reduce
@@ -41,6 +40,7 @@ def safe_remove(file):
 
 def safe_bedsort(input, output):
     call("sort -k1,1 -k2,2n " + input + " > " + output, shell=True)
+
 
 def get_uid():
     return str(uuid.uuid4())[:8]
@@ -122,6 +122,95 @@ def count_total_proper_templates(bam, minSize, maxSize):
     return proper_template_count
 
 
+def bam_proc_worker(args):
+    bam, chr, fid, minSize, maxSize = args
+    print("[%s] Processing %s" % (timestamp(), chr))
+
+    b = pysam.AlignmentFile(bam, "rb")
+
+    template_count_all = 0
+    template_count_fwd = 0
+    template_count_rev = 0
+    template_count_used_all = 0
+    template_count_used_fwd = 0
+    template_count_used_rev = 0
+
+    with open("tmp" + fid + chr + ".bed", "w") as s:
+        r_cache = {}
+        for read in b.fetch(reference=chr):
+
+            rid = read.query_name
+
+            ### read is NOT duplicated
+            ### read IS first in pair
+            ### read IS "properly paired" (read is mapped to forward strand, mate is mapped to reverse strand, and vice versa)
+            ### read is NOT chimeric read (i.e., no SA tag)
+            ### IF read has SA tag (SA: secondary alignment), read is ambiguous, and thus discard
+            if not read.is_duplicate and read.is_proper_pair and not read.has_tag("SA"):
+
+                if rid in r_cache:
+                    template_count_all += 1
+
+                    if read.is_read2:
+                        read1 = r_cache[rid]
+                        read2 = read
+                    else:
+                        read1 = read
+                        read2 = r_cache[rid]
+
+                    del r_cache[rid]
+
+                    r1_c = b.get_reference_name(read1.reference_id)
+                    r1_s = read1.reference_start
+                    r1_e = read1.reference_end
+                    r1_l = read1.template_length
+
+                    r2_c = b.get_reference_name(read2.reference_id)
+                    r2_s = read2.reference_start
+                    r2_e = read2.reference_end
+                    r2_l = read2.template_length
+
+                    if r1_c == r2_c:
+
+                        if not read1.is_reverse and read2.is_reverse:  ### read1 FWD read2 REV
+                            template_count_fwd += 1
+
+                            if int(minSize) <= r1_l and int(maxSize) >= r1_l:
+                                if (r2_e - r1_s) != r1_l:
+                                    print("[%s] (Warning) reads are not properly paired: %s" % (timestamp(), rid))
+                                else:
+                                    template_count_used_all += 1
+                                    template_count_used_fwd += 1
+                                    s.write("%s\t%i\t%i\t%s\t.\t%s\n" % (chr, r1_s, r2_e, rid, "+"))
+
+
+                        elif read1.is_reverse and not read2.is_reverse:  ### read1 REV read2 FWD
+                            template_count_rev += 1
+
+                            if int(minSize) <= r2_l and int(maxSize) >= r2_l:
+                                if (r1_e - r2_s) != r2_l:
+                                    print("[%s] (Warning) reads are not properly paired: %s" % (timestamp(), rid))
+                                else:
+                                    template_count_used_all += 1
+                                    template_count_used_rev += 1
+                                    s.write("%s\t%i\t%i\t%s\t.\t%s\n" % (chr, r2_s, r1_e, rid, "-"))
+
+                    else:
+                        print("[%s] (Warning) read pair mapped to different chromosomes: %s" % (timestamp(), rid))
+
+                else:
+                    r_cache[rid] = read
+
+    b.close()
+
+    safe_bedsort("tmp" + fid + chr + ".bed", "tmp" + fid + chr + ".sorted.bed")
+    safe_remove("tmp" + fid + chr + ".bed")
+
+    del r_cache
+    print("[%s] Finished processing %s" % (timestamp(), chr))
+    return (template_count_all, template_count_fwd, template_count_rev, template_count_used_all, template_count_used_fwd, template_count_used_rev)
+
+
 def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, readStart=False, strand="all"):
     '''
 
@@ -161,89 +250,20 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
             pysam.index(bam)
 
         b = pysam.AlignmentFile(bam, "rb")
+        total_mapped_reads = b.mapped
+        b.close()
 
-        template_count_all = 0
-        template_count_fwd = 0
-        template_count_rev = 0
-        template_count_used_all = 0
-        template_count_used_fwd = 0
-        template_count_used_rev = 0
-
-        for chr in list_chr(chromSize):
-
-            print("[%s] Processing %s" % (timestamp(), chr))
-
-            with open("tmp" + uid + bamidx[j] + chr + ".bed", "w") as s:
-                r_cache = {}
-                for read in b.fetch(reference=chr):
-
-                    rid = read.query_name
-
-                    ### read is NOT duplicated
-                    ### read IS first in pair
-                    ### read IS "properly paired" (read is mapped to forward strand, mate is mapped to reverse strand, and vice versa)
-                    ### read is NOT chimeric read (i.e., no SA tag)
-                    ### IF read has SA tag (SA: secondary alignment), read is ambiguous, and thus discard
-                    if not read.is_duplicate and read.is_proper_pair and not read.has_tag("SA"):
-
-                        if rid in r_cache:
-                            template_count_all += 1
-
-                            if read.is_read2:
-                                read1 = r_cache[rid]
-                                read2 = read
-                            else:
-                                read1 = read
-                                read2 = r_cache[rid]
-
-                            del r_cache[rid]
-
-                            r1_c = b.get_reference_name(read1.reference_id)
-                            r1_s = read1.reference_start
-                            r1_e = read1.reference_end
-                            r1_l = read1.template_length
-
-                            r2_c = b.get_reference_name(read2.reference_id)
-                            r2_s = read2.reference_start
-                            r2_e = read2.reference_end
-                            r2_l = read2.template_length
-
-                            if r1_c == r2_c:
-
-                                if not read1.is_reverse and read2.is_reverse:  ### read1 FWD read2 REV
-                                    template_count_fwd += 1
-
-                                    if int(minSize) <= r1_l and int(maxSize) >= r1_l:
-                                        if (r2_e - r1_s) != r1_l:
-                                            print("[%s] (Warning) reads are not properly paired: %s" % (timestamp(), rid))
-                                        else:
-                                            template_count_used_all += 1
-                                            template_count_used_fwd += 1
-                                            s.write("%s\t%i\t%i\t%s\t.\t%s\n" % (chr, r1_s, r2_e, rid, "+"))
-
-
-                                elif read1.is_reverse and not read2.is_reverse:  ### read1 REV read2 FWD
-                                    template_count_rev += 1
-
-                                    if int(minSize) <= r2_l and int(maxSize) >= r2_l:
-                                        if (r1_e - r2_s) != r2_l:
-                                            print("[%s] (Warning) reads are not properly paired: %s" % (timestamp(), rid))
-                                        else:
-                                            template_count_used_all += 1
-                                            template_count_used_rev += 1
-                                            s.write("%s\t%i\t%i\t%s\t.\t%s\n" % (chr, r2_s, r1_e,rid,  "-"))
-
-                            else:
-                                print("[%s] (Warning) read pair mapped to different chromosomes: %s" % (timestamp(), rid))
-
-                        else:
-                            r_cache[rid] = read
-
-        del r_cache
+        print("[%s] Parallel computing using %i cores" % (timestamp(), cpu_count()))
+        args_list = [(bam, c, uid + bamidx[j], minSize, maxSize) for c in list_chr(chromSize)]
+        pool = Pool(processes=cpu_count())
+        list_counts = pool.map(bam_proc_worker, args_list)
+        pool.close()
+        pool.join()
+        template_count_all, template_count_fwd, template_count_rev, template_count_used_all, template_count_used_fwd, template_count_used_rev = np.sum(list_counts, axis=0)
 
         tct[j] += template_count_used_all
 
-        print("[%s] %s mapped reads" % (timestamp(), '{:,}'.format(b.mapped)))
+        print("[%s] %s mapped reads" % (timestamp(), '{:,}'.format(total_mapped_reads)))
 
         print("[%s] %s templates extracted" % (timestamp(), '{:,}'.format(template_count_all)))
         print("[%s] %s templates used for count" % (timestamp(), '{:,}'.format(template_count_used_all)))
@@ -254,50 +274,44 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
         print("[%s] %s templates extracted (-)" % (timestamp(), '{:,}'.format(template_count_rev)))
         print("[%s] %s templates used for count (-)" % (timestamp(), '{:,}'.format(template_count_used_rev)))
 
-        b.close()
-
         print("[%s] Merging BED files" % (timestamp()))
-        with open(prefix + "." + bamidx[j] + ".frag.bed", "a") as merged:
+        with open(prefix + "." + bamidx[j] + ".frag.tmp.bed", "a") as merged:
             for chr in list_chr(chromSize):
 
                 ### merge tmp bed files
-                with open("tmp" + uid + bamidx[j] + chr + ".bed", "r") as t:
+                with open("tmp" + uid + bamidx[j] + chr + ".sorted.bed", "r") as t:
                     if t.read(1).strip():
                         t.seek(0)
                         merged.write(t.read())
 
                 ### delete tmp bed files
-                safe_remove("tmp" + uid + bamidx[j] + chr + ".bed")
+                safe_remove("tmp" + uid + bamidx[j] + chr + ".sorted.bed")
 
         if strand.lower() == "fwd":
             print("[%s] Counting fragments mapped to forward strand only" % (timestamp()))
-            with open(prefix + "." + bamidx[j] + ".frag.tmp.bed", "w") as frag_tmp:
-                with open(prefix + "." + bamidx[j] + ".frag.bed", "r") as frag:
+            with open(prefix + "." + bamidx[j] + ".frag.bed", "w") as frag_tmp:
+                with open(prefix + "." + bamidx[j] + ".frag.tmp.bed", "r") as frag:
                     for line in frag.readlines():
                         if line.strip().split('\t')[5] == "+":
                             frag_tmp.write(line)
-            safe_bedsort(prefix + "." + bamidx[j] + ".frag.tmp.bed",prefix + "." + bamidx[j] + ".frag.sorted.bed")
-            safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
 
         elif strand.lower() == "rev":
             print("[%s] Counting fragments mapped to reverse strand only" % (timestamp()))
-            with open(prefix + "." + bamidx[j] + ".frag.tmp.bed", "w") as frag_tmp:
-                with open(prefix + "." + bamidx[j] + ".frag.bed", "r") as frag:
+            with open(prefix + "." + bamidx[j] + ".frag.bed", "w") as frag_tmp:
+                with open(prefix + "." + bamidx[j] + ".frag.tmp.bed", "r") as frag:
                     for line in frag.readlines():
                         if line.strip().split('\t')[5] == "-":
                             frag_tmp.write(line)
-            safe_bedsort(prefix + "." + bamidx[j] + ".frag.tmp.bed", prefix + "." + bamidx[j] + ".frag.sorted.bed")
-            safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
 
         else:
             print("[%s] Counting fragments mapped to both forward and reverse strand" % (timestamp()))
-            safe_bedsort(prefix + "." + bamidx[j] + ".frag.bed", prefix + "." + bamidx[j] + ".frag.sorted.bed")
+            pybedtools.BedTool(prefix + "." + bamidx[j] + ".frag.tmp.bed").saveas(prefix + "." + bamidx[j] + ".frag.bed")
 
-        safe_remove(prefix + "." + bamidx[j] + ".frag.bed")
+        safe_remove(prefix + "." + bamidx[j] + ".frag.tmp.bed")
 
         ### save genome coverage
         print("[%s] Making genome coverage bedGraph" % (timestamp()))
-        mergedBed = pybedtools.BedTool(prefix + "." + bamidx[j] + ".frag.sorted.bed")
+        mergedBed = pybedtools.BedTool(prefix + "." + bamidx[j] + ".frag.bed")
         mergedBed.genome_coverage(bg=True, g=chromSize).saveas(prefix + "." + bamidx[j] + ".bdg")
 
         ### convert bedGraph to bigWig
@@ -309,7 +323,7 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
             ### calculate read start position
             print("[%s] Using read start position" % (timestamp()))
             with open(prefix + "." + bamidx[j] + ".bpCount.bed", "w") as bpCount:
-                with open(prefix + "." + bamidx[j] + ".frag.sorted.bed", "r") as merged:
+                with open(prefix + "." + bamidx[j] + ".frag.bed", "r") as merged:
                     for line in merged.readlines():
                         chr, start, end, _, _, _ = line.strip().split('\t')
                         bpCount.write(chr + '\t' + start + '\t' + str(int(start) + 1) + '\n')
@@ -319,7 +333,7 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
             ### calculate center of fragment
             print("[%s] Using fragment center" % (timestamp()))
             with open(prefix + "." + bamidx[j] + ".bpCount.bed", "w") as bpCount:
-                with open(prefix + "." + bamidx[j] + ".frag.sorted.bed", "r") as merged:
+                with open(prefix + "." + bamidx[j] + ".frag.bed", "r") as merged:
                     for line in merged.readlines():
                         chr, start, end, _, _, _ = line.strip().split('\t')
                         bpCount.write(chr + '\t' + str(int(start) + int((int(end) - int(start)) / 2) - 1) + '\t' + str(int(start) + int((int(end) - int(start)) / 2)) + '\n')
@@ -719,10 +733,11 @@ def proc_fenergy(bedFile, fileOut, linearfold, genome):
         prefixes.append(["tmp" + uid + "_" + str(part_num), linearfold, genome])
 
     ### parallel compute linearfold
-    print("[%s] Parallel computing using %i cores" % (timestamp(), multiprocessing.cpu_count()))
-    pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+    print("[%s] Parallel computing using %i cores" % (timestamp(), cpu_count()))
+    pool = Pool(processes=cpu_count())
     pool.map(run_linearfold, prefixes)
-    pool.terminate()
+    pool.close()
+    pool.join()
 
     ### merge bed
     print("[%s] Merging files" % (timestamp()))
@@ -754,7 +769,7 @@ def run_linearfold(arg):
     pybedtools.BedTool(arg[0] + ".bed").sequence(fi=arg[2]).save_seqs(arg[0] + ".fa")
     safe_remove(arg[0] + ".bed")
     with open(arg[0] + ".fa", 'r') as fa:
-        out = subprocess.check_output([arg[1], "-V"], stdin=fa)
+        out = check_output([arg[1], "-V"], stdin=fa)
     with open(arg[0] + ".out", 'w') as fo:
         for line in out.split("\n"):
             line_split = line.strip().split(" ")
@@ -794,6 +809,7 @@ def split_bed(bedFile, uid):
         if part:
             part.close()
     return chr_list
+
 
 def proc_bam_legacy(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=False):
     '''
