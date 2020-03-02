@@ -25,7 +25,7 @@ parser.add_argument('-o', '--output', help='STARR-seq RNA Output BAM File', requ
 ### optional args
 parser.add_argument('--min', help='Minimum Insert Size', required=False, type=int, default=200)
 parser.add_argument('--max', help='Maximum Insert Size', required=False, type=int, default=1000)
-parser.add_argument('--readstart', help='Use Read Start Position instead of Fragment Center', required=False, type=bool, default=False)
+parser.add_argument('--readstart', help='Use Read Start Position instead of Fragment Center', required=False, action='store_true')
 parser.add_argument('--strand', help='Use all/fwd/rev Stranded Fragments', required=False, type=str, default="all")
 
 args = parser.parse_args()
