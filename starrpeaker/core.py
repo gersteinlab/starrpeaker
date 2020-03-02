@@ -610,6 +610,8 @@ def call_peak(prefix, bedFile, bctFile, chromSize, bwFile, covFile=None, thresho
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(bed.readlines()):
                 ff.write("%s\t%.3f\n" % (bin.strip(), fc[i]))
+
+        with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
                 fp.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
                 fq.write("%s\t%.3f\n" % (bin.strip(), abs(q_score[i])))
@@ -748,7 +750,7 @@ def proc_fenergy(bedFile, fileOut, linearfold, genome):
     ### merge bed
     print("[%s] Merging files" % (timestamp()))
     safe_remove(fileOut)
-    with open(fileOut, "a") as merged:
+    with open(fileOut, "w") as merged:
         for part_num in part_list:
 
             ### merge tmp bed files
