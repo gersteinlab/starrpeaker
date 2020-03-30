@@ -2,7 +2,7 @@
 
 __author__ = "Donghoon Lee"
 __copyright__ = "Copyright 2019, Gerstein Lab"
-__credits__ = ["Donghoon Lee"]
+__credits__ = ["Donghoon Lee","Mark Gerstein"]
 __license__ = "GPL"
 __version__ = "1.0.0"
 __maintainer__ = "Donghoon Lee"

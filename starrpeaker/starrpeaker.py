@@ -2,7 +2,7 @@
 
 __author__ = "Donghoon Lee"
 __copyright__ = "Copyright 2019, Gerstein Lab"
-__credits__ = ["Donghoon Lee"]
+__credits__ = ["Donghoon Lee","Mark Gerstein"]
 __license__ = "GPL"
 __version__ = "1.0.0"
 __maintainer__ = "Donghoon Lee"
@@ -13,7 +13,7 @@ import core
 
 ### LOAD ARGs ###
 
-parser = argparse.ArgumentParser(description='STARR-Peaker')
+parser = argparse.ArgumentParser(description='STARRPeaker')
 
 ### required args
 parser.add_argument('--prefix', help='Output File Prefix', required=True)

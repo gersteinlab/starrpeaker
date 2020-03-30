@@ -1,14 +1,14 @@
 #!/usr/bin/python
-from __future__ import division
 
 __author__ = "Donghoon Lee"
 __copyright__ = "Copyright 2019, Gerstein Lab"
-__credits__ = ["Donghoon Lee"]
+__credits__ = ["Donghoon Lee","Mark Gerstein"]
 __license__ = "GPL"
 __version__ = "1.0.0"
 __maintainer__ = "Donghoon Lee"
 __email__ = "donghoon.lee@yale.edu"
 
+from __future__ import division
 import numpy as np
 import pandas as pd
 import pybedtools
@@ -24,8 +24,6 @@ from itertools import compress
 from subprocess import check_output, call
 from multiprocessing import Pool, cpu_count
 from sklearn import preprocessing
-
-
 # from functools import reduce
 
 
@@ -43,10 +41,30 @@ def safe_bedsort(input, output):
 
 
 def get_uid():
+    '''
+
+    Returns:
+        8 digit unique identifier in string
+
+    '''
     return str(uuid.uuid4())[:8]
 
 
 def make_bin(prefix, chromSize, binLength, stepSize, blackList):
+    '''
+    makes genomic bins in BED format
+
+    Args:
+        prefix: prefix for the output
+        chromSize: chrom size file
+        binLength: genomic bin width
+        stepSize: sliding window step
+        blackList: blacklist in BED format
+
+    Returns:
+        None
+
+    '''
     ### make sliding window
     print("[%s] Making bins" % (timestamp()))
     bin = pybedtools.BedTool().window_maker(g=chromSize, w=binLength, s=stepSize)
@@ -64,6 +82,19 @@ def make_bin(prefix, chromSize, binLength, stepSize, blackList):
 
 
 def proc_cov(prefix, bedFile, bwFiles):
+    '''
+
+    processes covariate bigWig files
+
+    Args:
+        prefix: prefix for the output file
+        bedFile: genomic bin in BED format
+        bwFiles: covariates in bigWig format
+
+    Returns:
+        None
+
+    '''
     ### average bigwig over bin bed
     print("[%s] Averaging features per bin" % (timestamp()))
     mat = np.zeros(shape=(sum(1 for l in open(bedFile)), len(bwFiles)), dtype=float)
@@ -238,13 +269,15 @@ def bam_proc_worker(args):
 def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, readStart=False, strand="all"):
     '''
 
+    processes alignments in BAM format
+
     Args:
         prefix: prefix for the output
         chromSize: chrom size file
         bedFile: bin BED file
         bamFiles: list of BAM files eg. [input.bam output.bam]
-        minSize: minimum size of fragment insert to consider
-        maxSize: maximum size of fragment insert to consider
+        minSize: minimum size of fragment insert to consider (default 200)
+        maxSize: maximum size of fragment insert to consider (default 1000)
         readStart: count at start positions of reads
         strand: use all/fwd/rev stranded fragments
 
@@ -419,6 +452,8 @@ def theta(y, mu, verbose=False):
 
 def call_peak(prefix, bedFile, bctFile, chromSize, bwFile, covFile=None, threshold=0.05, mode=1, minCoverage=10, extQuantile=1e-5):
     '''
+
+    calls peak
 
     Args:
         (Required)
@@ -683,6 +718,19 @@ def bdg2bw(bdgFile, bwFile, chromSize, window=None, step=None):
 
 
 def center_peak(bwFile, peakFile, centeredPeakFile):
+    '''
+
+    centers peak file
+
+    Args:
+        bwFile: bigWig file
+        peakFile: peak file in BED format
+        centeredPeakFile: centered peak file name
+
+    Returns:
+        None
+
+    '''
     bw = pyBigWig.open(bwFile)
     peak = pybedtools.BedTool(peakFile)
 
@@ -714,6 +762,20 @@ def center_peak(bwFile, peakFile, centeredPeakFile):
 
 
 def proc_fenergy(bedFile, fileOut, linearfold, genome):
+    '''
+
+    calculates folding free energy in parallel
+
+    Args:
+        bedFile: genomic bins in BED format
+        fileOut: output file
+        linearfold: path to linearfold
+        genome: reference genome in fasta format
+
+    Returns:
+        None
+
+    '''
     print("[%s] Calculate Folding Free Energy per bin" % (timestamp()))
 
     ### random unique ID
@@ -821,6 +883,8 @@ def split_bed(bedFile, uid):
 
 def proc_bam_legacy(bamFiles, bedFile, chromSize, fileOut, minSize, maxSize, readStart=False):
     '''
+    process bam file legacy code, retained for backward compatibility
+    use 'proc_bam' instead
 
     Args:
         bamFiles: list of BAM files eg. [input.bam output.bam]
