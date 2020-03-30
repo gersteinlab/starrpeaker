@@ -2,7 +2,7 @@
 
 __author__ = "Donghoon Lee"
 __copyright__ = "Copyright 2019, Gerstein Lab"
-__credits__ = ["Donghoon Lee"]
+__credits__ = ["Donghoon Lee","Mark Gerstein"]
 __license__ = "GPL"
 __version__ = "1.0.0"
 __maintainer__ = "Donghoon Lee"
@@ -26,8 +26,8 @@ parser.add_argument('--step', help='Step Size', required=False, type=int, defaul
 
 args = parser.parse_args()
 
-if __name__ == "__main__": core.make_bin(chromSize=args.chromsize,
+if __name__ == "__main__": core.make_bin(prefix=args.prefix,
+                                         chromSize=args.chromsize,
                                          binLength=args.length,
                                          stepSize=args.step,
-                                         blackList=args.blacklist,
-                                         fileOut=args.prefix + ".bin.bed")
+                                         blackList=args.blacklist)
