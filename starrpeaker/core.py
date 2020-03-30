@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from __future__ import division
 
 __author__ = "Donghoon Lee"
 __copyright__ = "Copyright 2019, Gerstein Lab"
@@ -8,7 +9,6 @@ __version__ = "1.0.0"
 __maintainer__ = "Donghoon Lee"
 __email__ = "donghoon.lee@yale.edu"
 
-from __future__ import division
 import numpy as np
 import pandas as pd
 import pybedtools
