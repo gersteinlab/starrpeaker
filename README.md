@@ -94,9 +94,10 @@ starrpeaker --prefix <prefix for output files> --chromsize <hg38.chrom.sizes> --
 * Column 2: Start position
 * Column 3: End position
 * Column 4: Name (peak rank based on score, 1 being the highest rank)
-* Column 5: Score (integer value of "100 * fold change", maxed at 1000 per BED format specification. See ref: https://genome.ucsc.edu/FAQ/FAQformat.html#format1)
+* Column 5: Score (integer value of "100 * fold change", maxed at 1000 per BED format specification)
 * Column 6: Strand
 * Column 7: Fold change (output/normalized-input)
 * Column 8: Output fragment coverage
 * Column 9: -log10 of P-value
 * Column 10: -log10 of Q-value (Benjamini-Hochberg False Discovery Rate, FDR)
+BED format specification: https://genome.ucsc.edu/FAQ/FAQformat.html#format1)
