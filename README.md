@@ -100,4 +100,5 @@ starrpeaker --prefix <prefix for output files> --chromsize <hg38.chrom.sizes> --
 * Column 8: Output fragment coverage
 * Column 9: -log10 of P-value
 * Column 10: -log10 of Q-value (Benjamini-Hochberg False Discovery Rate, FDR)
-BED format specification: https://genome.ucsc.edu/FAQ/FAQformat.html#format1)
+
+*BED format specification: https://genome.ucsc.edu/FAQ/FAQformat.html#format1)*
