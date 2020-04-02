@@ -3,7 +3,7 @@ from __future__ import division
 
 __author__ = "Donghoon Lee"
 __copyright__ = "Copyright 2019, Gerstein Lab"
-__credits__ = ["Donghoon Lee","Mark Gerstein"]
+__credits__ = ["Donghoon Lee", "Mark Gerstein"]
 __license__ = "GPL"
 __version__ = "1.0.0"
 __maintainer__ = "Donghoon Lee"
@@ -24,6 +24,8 @@ from itertools import compress
 from subprocess import check_output, call
 from multiprocessing import Pool, cpu_count
 from sklearn import preprocessing
+
+
 # from functools import reduce
 
 
@@ -627,8 +629,8 @@ def call_peak(prefix, bedFile, bctFile, chromSize, bwFile, covFile=None, thresho
     print("[%s] Multiple testing correction" % (timestamp()))
     _, qval, _, _ = multi.multipletests(pval, method="fdr_bh")
 
-    p_score = -np.log10(pval)
-    q_score = -np.log10(qval)
+    nlog10pval = -np.log10(pval)
+    nlog10qval = -np.log10(qval)
 
     ### output initial peaks
     print("[%s] Output initial peaks" % (timestamp()))
@@ -636,8 +638,8 @@ def call_peak(prefix, bedFile, bctFile, chromSize, bwFile, covFile=None, thresho
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
                 if qval[i] <= float(threshold):
-                    ### chr, start, end, foldChg, inputCt, outputCt, pval, qval
-                    out.write("%s\t%.3f\t%.3f\t%.3f\t%.5e\t%.5e\n" % (bin.strip(), fc[testingBin][i], mat[testingBin, 1][i], mat[testingBin, 0][i], pval[i], qval[i]))
+                    ### chr, start, end, foldChg, inputCov, outputCov, -log10(pval), -log10(qval)
+                    out.write("%s\t%.3f\t%i\t%i\t%.3f\t%.3f\n" % (bin.strip(), fc[testingBin][i], mat[testingBin, 1][i], mat[testingBin, 0][i], nlog10pval[i], nlog10qval[i]))
 
     ### generate various bdg tracks
     print("[%s] Generating bedGraph files" % (timestamp()))
@@ -648,10 +650,10 @@ def call_peak(prefix, bedFile, bctFile, chromSize, bwFile, covFile=None, thresho
 
         with open(bedFile, "r") as bed:
             for i, bin in enumerate(list(compress(bed.readlines(), testingBin))):
-                fp.write("%s\t%.3f\n" % (bin.strip(), abs(p_score[i])))
-                fq.write("%s\t%.3f\n" % (bin.strip(), abs(q_score[i])))
+                fp.write("%s\t%.3f\n" % (bin.strip(), nlog10pval[i]))
+                fq.write("%s\t%.3f\n" % (bin.strip(), nlog10qval[i]))
 
-    del mat, mat_model, p_score, q_score, pval, qval
+    del mat, mat_model, nlog10pval, nlog10qval, pval, qval
 
     ### make bigWig track
     print("[%s] Making BigWig tracks" % (timestamp()))
@@ -676,12 +678,26 @@ def call_peak(prefix, bedFile, bctFile, chromSize, bwFile, covFile=None, thresho
     print("[%s] Center peaks" % (timestamp()))
     center_peak(bwFile=bwFile, peakFile=prefix + ".peak.bed", centeredPeakFile=prefix + ".peak.centered.bed")
 
-    ### merge centered peak
-    print("[%s] Merge & finalize peaks" % (timestamp()))
-    pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 5, 6, 7, 8], o=["max", "max", "max", "min", "min"]).saveas(prefix + ".peak.final.bed")
+    ### merge peak
+    print("[%s] Merge peaks" % (timestamp()))
+    pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 6, 7, 8], o=["max", "max", "max", "max"]).saveas(prefix + ".peak.centered.merged.bed")
 
-    ### remove intermediate peak file
+    ### finalize peak
+    print("[%s] Finalize peaks" % (timestamp()))
+    peak = pd.read_csv(prefix + ".peak.centered.merged.bed", sep='\t', header=None)
+    peak.columns = ['chr', 'start', 'end', 'fc', 'cov', 'nlog10pval', 'nlog10qval']
+    peak['idx'] = peak.index
+    peak['strand'] = "."
+    peak['score'] = [min(int(round(x)), 1000) for x in peak['fc'] * 100]
+    peak = peak.sort_values(by=['fc'], ascending=False)
+    peak['name'] = ['peak_' + str(x) for x in peak.reset_index().index + 1]
+    peak = peak.sort_values(by=['idx'])
+    final = peak[['chr', 'start', 'end', 'name', 'score', 'strand', 'fc', 'cov', 'nlog10pval', 'nlog10qval']]
+    final.to_csv(prefix + '.peak.final.bed', sep='\t', float_format='%.3f', index=False, header=False)
+
+    ### remove intermediate peak files
     safe_remove(prefix + ".peak.centered.bed")
+    safe_remove(prefix + ".peak.centered.merged.bed")
 
     print("[%s] Done" % (timestamp()))
 
@@ -732,10 +748,9 @@ def center_peak(bwFile, peakFile, centeredPeakFile):
 
     '''
     bw = pyBigWig.open(bwFile)
-    peak = pybedtools.BedTool(peakFile)
 
     with open(centeredPeakFile, "w") as out:
-        for p in peak:
+        for p in pybedtools.BedTool(peakFile):
             chr = p[0]
             start = int(p[1])
             end = int(p[2])
@@ -754,10 +769,8 @@ def center_peak(bwFile, peakFile, centeredPeakFile):
                 cov = np.array(interval, dtype=int)
                 summit = cov[np.nonzero(cov[:, 2] == np.max(cov[:, 2]))]
                 center = int((summit[0, 0] + summit[-1, 1]) / 2)
-                out.write('\t'.join(
-                    [chr, str(center - radius), str(center + radius), other]) + '\n')
+                out.write('\t'.join([chr, str(center - radius), str(center + radius), other]) + '\n')
 
-    del peak
     bw.close()
 
 

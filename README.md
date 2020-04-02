@@ -79,22 +79,26 @@ starrpeaker --prefix <prefix for output files> --chromsize <hg38.chrom.sizes> --
 ```
 
 ## Outputs Files
-* *prefix*.bin.bed: bin BED file
-* *prefix*.bam.bct: bin count in BST format (1st col: input, 2nd col: output, 3rd col: normalized input)
-* *prefix*.cov.tsv: covariate matrix in TSV format
-* *prefix*.input.bw: input fragment coverage in bigWig format
-* *prefix*.output.bw: output fragment coverage in bigWig format
-* *prefix*.peak.bed: initial peak calls (before centering and merging)
-* *prefix*.peak.final.bed: final peak calls
-* *prefix*.peak.pval.bw: p-value track in bigWig format (-log10)
-* *prefix*.peak.qval.bw: q-value track in bigWig format (-log10)
+* *prefix*.bin.bed: Genomic bin BED file
+* *prefix*.bam.bct: Alignment counts in BST format (1st col: input, 2nd col: output, 3rd col: normalized input)
+* *prefix*.cov.tsv: Covariate matrix in TSV format
+* *prefix*.input.bw: Input fragment coverage in bigWig format
+* *prefix*.output.bw: Output fragment coverage in bigWig format
+* *prefix*.peak.bed: Initial peak calls (before centering and merging)
+* *prefix*.peak.final.bed: Final peak calls
+* *prefix*.peak.pval.bw: P-value track in bigWig format (-log10)
+* *prefix*.peak.qval.bw: Q-value track in bigWig format (-log10)
 
-## Peak File Format
-* Column 1: chromosome
-* Column 2: start
-* Column 3: end
-* Column 4: fold change (output/normalized-input)
-* Column 5: input fragment count
-* Column 6: output fragment count
-* Column 7: p-value
-* Column 8: q-value (Benjamini-Hochberg False Discovery Rate, FDR)
+## Final Peak Call Format (BED6+4)
+* Column 1: Chromosome
+* Column 2: Start position
+* Column 3: End position
+* Column 4: Name (peak rank based on score, 1 being the highest rank)
+* Column 5: Score (integer value of "100 * fold change", maxed at 1000 per BED format specification)
+* Column 6: Strand
+* Column 7: Fold change (output/normalized-input)
+* Column 8: Output fragment coverage
+* Column 9: -log10 of P-value
+* Column 10: -log10 of Q-value (Benjamini-Hochberg False Discovery Rate, FDR)
+
+*BED format specification: https://genome.ucsc.edu/FAQ/FAQformat.html#format1*
