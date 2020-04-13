@@ -27,9 +27,24 @@ starrpeaker -h
 For each biological replicates in FASTQ format
 
 1. Aligned paired-end reads using BWA mem (v0.7.17)
-2. Filtered alignments using SAMtools (v1.5) with the following arguments
-filter: -F 1804 exclude FLAG 1804: unmapped, next segment unmapped, secondary alignments, not passing platform q, PCR or optical duplicates; -f 2 require FLAG 2: properly aligned; -q 30 exclude MAPQ < 30; -u uncompressed output; 
-3. Removed duplicates using picard (v2.9.0)
+2. Removed duplicates using picard (v2.9.0)
+3. Filtered alignments using SAMtools (v1.9) with the following arguments
+```
+samtools view -F 3852 -f 2 -q 40
+
+# -F: exclude FLAG 3852
+#    4 read unmapped (0x4)
+#    8 mate unmapped (0x8)
+#  256 not primary alignment (0x100)
+#  512 read fails platform/vendor quality checks (0x200)
+# 1024 read is PCR or optical duplicate (0x400)
+# 2048 supplementary alignment (0x800)
+
+# -f: require FLAG 2
+#    2 properly aligned
+
+# -q: exclude MAPQ less than 40
+```
 4. Merged biological replicates using SAMtools
 
 ## Inputs
