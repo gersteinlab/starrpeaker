@@ -12,9 +12,11 @@ Uniform processing pipeline and peak caller for STARR-seq data
 * statsmodels (v0.10.1, use v0.10.2 or earlier, new function statsmodels/tools/validation/validation.py introduced in v0.11.0 may introduce error in Python 2)
 * scikit-learn (v0.20.3)
 
-## installation
+## Installation
 Preferably, create a conda environment with Python 2.7
 ```
+conda create -n starrpeaker python=2.7 pybedtools
+conda activate starrpeaker
 pip install git+https://github.com/gersteinlab/starrpeaker
 starrpeaker -h
 ```
