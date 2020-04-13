@@ -1,16 +1,16 @@
 # STARRPeaker
 Uniform processing pipeline and peak caller for STARR-seq data
 
-## Dependencies
-* Python 2.7 (tested on Python 2.7.10-2.7.15)
-* pysam
-* pybedtools
-* pyBigWig
-* numpy
-* scipy
-* pandas
-* statsmodels
-* sklearn (tested on 0.20.3)
+## Dependencies (version tested)
+* Python 2.7 (v2.7.15)
+* pysam (v0.15.3)
+* pybedtools (v0.8.1)
+* pyBigWig (v0.3.13)
+* numpy (v1.15.4)
+* scipy (v1.2.0)
+* pandas (v0.24.1)
+* statsmodels (v0.10.1, use v0.10.2 or earlier, new function statsmodels/tools/validation/validation.py introduced in v0.11.0 may introduce error in Python 2)
+* scikit-learn (v0.20.3)
 
 ## installation
 Preferably, create a conda environment with Python 2.7
