@@ -15,6 +15,8 @@ Uniform processing pipeline and peak caller for STARR-seq data
 ## installation
 Preferably, create a conda environment with Python 2.7
 ```
+conda create -n starrpeaker python=2.7 pybedtools
+conda activate starrpeaker
 pip install git+https://github.com/gersteinlab/starrpeaker
 starrpeaker -h
 ```
