@@ -1,20 +1,22 @@
 # STARRPeaker
 Uniform processing pipeline and peak caller for STARR-seq data
 
-## Dependencies
-* Python 2.7 (tested on Python 2.7.10-2.7.15)
-* pysam
-* pybedtools
-* pyBigWig
-* numpy
-* scipy
-* pandas
-* statsmodels
-* sklearn (tested on 0.20.3)
+## Dependencies (version tested)
+* Python 2.7 (v2.7.15)
+* pysam (v0.15.3)
+* pybedtools (v0.8.1)
+* pyBigWig (v0.3.13)
+* numpy (v1.15.4)
+* scipy (v1.2.0)
+* pandas (v0.24.1)
+* statsmodels (v0.10.1, use v0.10.2 or earlier, new function statsmodels/tools/validation/validation.py introduced in v0.11.0 may introduce error in Python 2)
+* scikit-learn (v0.20.3)
 
-## installation
+## Installation
 Preferably, create a conda environment with Python 2.7
 ```
+conda create -n starrpeaker python=2.7 pybedtools
+conda activate starrpeaker
 pip install git+https://github.com/gersteinlab/starrpeaker
 starrpeaker -h
 ```
@@ -25,9 +27,24 @@ starrpeaker -h
 For each biological replicates in FASTQ format
 
 1. Aligned paired-end reads using BWA mem (v0.7.17)
-2. Filtered alignments using SAMtools (v1.5) with the following arguments
-filter: -F 1804 exclude FLAG 1804: unmapped, next segment unmapped, secondary alignments, not passing platform q, PCR or optical duplicates; -f 2 require FLAG 2: properly aligned; -q 30 exclude MAPQ < 30; -u uncompressed output; 
-3. Removed duplicates using picard (v2.9.0)
+2. Removed duplicates using picard (v2.9.0)
+3. Filtered alignments using SAMtools (v1.9) with the following arguments
+```
+samtools view -F 3852 -f 2 -q 40
+
+# -F: exclude FLAG 3852
+#    4 read unmapped (0x4)
+#    8 mate unmapped (0x8)
+#  256 not primary alignment (0x100)
+#  512 read fails platform/vendor quality checks (0x200)
+# 1024 read is PCR or optical duplicate (0x400)
+# 2048 supplementary alignment (0x800)
+
+# -f: require FLAG 2
+#    2 properly aligned
+
+# -q: exclude MAPQ less than 40
+```
 4. Merged biological replicates using SAMtools
 
 ## Inputs
