@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(description='Calculate Folding Energy')
 
 ### required args
 parser.add_argument('--bed', help='BED File', required=True)
-parser.add_argument('--tsv', help='STARR-seq BAM File', required=True)
+parser.add_argument('--out', help='Output TSV File', required=True)
 parser.add_argument('--linearfold', help='Path to LinearFold binary', required=True)
 parser.add_argument('--genome', help='Genome FASTA File', required=True)
 
@@ -27,6 +27,6 @@ def main():
     core.proc_fenergy(bedFile=args.bed,
                       fileOut=args.out,
                       linearfold=args.linearfold,
-                      genome=args.fa)
+                      genome=args.genome)
 
 if __name__ == "__main__": main()
