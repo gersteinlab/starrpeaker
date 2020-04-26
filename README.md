@@ -55,7 +55,7 @@ samtools view -F 3852 -f 2 -q 40
 * Blacklist (BED) file (i.e., https://www.encodeproject.org/files/ENCFF419RSJ/)
 
 ## Covariates
-The peak calling algorithm models STARR-seq fragment coverage across the genome using multiple covariates to correct for potential sequencing bias. It is recommended to include potential confounding variables into the model. These includes but not limited to GC-content, mappability tracks, and so on.
+The peak calling algorithm models STARR-seq fragment coverage across the genome using multiple covariates to correct for potential sequencing bias. It is recommended to include potential confounding variables into the model. These include but not limited to GC-content, mappability tracks, and so on.
 
 The following covariates have been precomputed for use with STARRPeaker:
 * [Download link to covariates](http://gofile.me/4kBY9/EKNVQrVHM)
