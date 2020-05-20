@@ -34,6 +34,7 @@ parser.add_argument('--threshold', help='Adjusted P-value Threshold', required=F
 parser.add_argument('--mode', help='Mode', required=False, type=int, default=1)
 parser.add_argument('--mincov', help='Minimum Coverage', required=False, type=int, default=10)
 parser.add_argument('--eq', help='Extreme Quantile to Remove', required=False, type=float, default=1e-5)
+parser.add_argument('--se', help='Use Single-End instead of Paired-end Sequencing', required=False, action='store_true')
 
 args = parser.parse_args()
 
@@ -60,7 +61,8 @@ def main():
                   minSize=args.min,
                   maxSize=args.max,
                   readStart=args.readstart,
-                  strand=args.strand)
+                  strand=args.strand,
+                  singleEnd=args.se)
 
     ### call peaks
     if args.cov:

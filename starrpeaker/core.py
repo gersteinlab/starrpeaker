@@ -155,6 +155,67 @@ def count_total_proper_templates(bam, minSize, maxSize):
     return proper_template_count
 
 
+def bam_proc_worker_se(args):
+    bam, chr, fid, minSize, maxSize, strand, readStart = args
+    print("[%s] Processing %s" % (timestamp(), chr))
+
+    b = pysam.AlignmentFile(bam, "rb")
+
+    read_count_all = 0
+    read_count_fwd = 0
+    read_count_rev = 0
+    read_count_used_all = 0
+    read_count_used_fwd = 0
+    read_count_used_rev = 0
+
+    with open("tmp" + fid + chr + ".bed", "w") as s, open("tmp" + fid + chr + ".bpCount.bed", "w") as bpCount:
+        for read in b.fetch(reference=chr):
+
+            rid = read.query_name
+
+            ### read is NOT duplicated
+            if not read.is_duplicate:
+
+                read_count_all += 1
+
+                # r_c = b.get_reference_name(read.reference_id)
+                r_s = read.reference_start
+                r_e = read.reference_end
+
+                if not read.is_reverse:  ### read FWD
+                    read_count_fwd += 1
+
+                    if strand.lower() != "rev":
+                        read_count_used_all += 1
+                        read_count_used_fwd += 1
+
+                        s.write("%s\t%i\t%i\t%s\t.\t%s\n" % (chr, r_s, r_e, rid, "+"))
+                        bpCount.write(chr + '\t' + str(r_s) + '\t' + str(int(r_s) + 1) + '\n')
+
+                elif read.is_reverse:  ### read REV
+                    read_count_rev += 1
+
+                    if strand.lower() != "fwd":
+                        read_count_used_all += 1
+                        read_count_used_rev += 1
+
+                        s.write("%s\t%i\t%i\t%s\t.\t%s\n" % (chr, r_s, r_e, rid, "-"))
+                        bpCount.write(chr + '\t' + str(r_s) + '\t' + str(int(r_s) + 1) + '\n')
+
+                else:
+                    print("[%s] (Warning) read pair mapped to different chromosomes: %s" % (timestamp(), rid))
+
+    b.close()
+
+    safe_bedsort("tmp" + fid + chr + ".bed", "tmp" + fid + chr + ".sorted.bed")
+    safe_remove("tmp" + fid + chr + ".bed")
+
+    safe_bedsort("tmp" + fid + chr + ".bpCount.bed", "tmp" + fid + chr + ".bpCount.sorted.bed")
+    safe_remove("tmp" + fid + chr + ".bpCount.bed")
+
+    print("[%s] Finished processing %s" % (timestamp(), chr))
+    return (read_count_all, read_count_fwd, read_count_rev, read_count_used_all, read_count_used_fwd, read_count_used_rev)
+
 def bam_proc_worker(args):
     bam, chr, fid, minSize, maxSize, strand, readStart = args
     print("[%s] Processing %s" % (timestamp(), chr))
@@ -268,7 +329,7 @@ def bam_proc_worker(args):
     return (template_count_all, template_count_fwd, template_count_rev, template_count_used_all, template_count_used_fwd, template_count_used_rev)
 
 
-def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, readStart=False, strand="all"):
+def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, readStart=False, strand="all", singleEnd=False):
     '''
 
     processes alignments in BAM format
@@ -321,7 +382,11 @@ def proc_bam(prefix, chromSize, bedFile, bamFiles, minSize=200, maxSize=1000, re
         print("[%s] Parallel processing using %i cores" % (timestamp(), cpu_count()))
         args_list = [(bam, c, uid + bamidx[j], minSize, maxSize, strand, readStart) for c in list_chr(chromSize)]
         pool = Pool(processes=cpu_count())
-        list_counts = pool.map(bam_proc_worker, args_list)
+        if singleEnd:
+            print("[%s] Using single-end mode (SE mode uses read start position and min-max options are ignored)" % (timestamp()))
+            list_counts = pool.map(bam_proc_worker_se, args_list)
+        else:
+            list_counts = pool.map(bam_proc_worker, args_list)
 
         template_count_all, template_count_fwd, template_count_rev, template_count_used_all, template_count_used_fwd, template_count_used_rev = np.sum(list_counts, axis=0)
 

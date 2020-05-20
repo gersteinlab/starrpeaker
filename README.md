@@ -77,7 +77,7 @@ usage: starrpeaker.py [-h] --prefix PREFIX --chromsize CHROMSIZE --blacklist
                       [--step STEP] [--cov COV [COV ...]] [--min MIN]
                       [--max MAX] [--readstart] [--strand STRAND]
                       [--threshold THRESHOLD] [--mode MODE] [--mincov MINCOV]
-                      [--eq EQ]
+                      [--eq EQ] [--se]
 
 STARRPeaker
 
@@ -101,6 +101,7 @@ optional arguments:
   --mode MODE                 Mode [1 - using input as covariate (default), 2 - using input as offset]
   --mincov MINCOV             Minimum Coverage (default: 10)
   --eq EQ                     Extreme Quantile to Remove (default: 1e-5)
+  --se                        Use Single-End instead of Paired-end Sequencing
 ```
 
 ## Example
