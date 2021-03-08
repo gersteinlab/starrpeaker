@@ -51,8 +51,8 @@ samtools view -F 3852 -f 2 -q 40
 * Input alignment (BAM) file (STARR-seq input)
 * Output alignment (BAM) file (STARR-seq output)
 * Covariates (BigWig) file(s)
-* Chrom Size file (i.e., https://hgdownload-test.gi.ucsc.edu/goldenPath/hg38/bigZips/hg38.chrom.sizes) 
-* Blacklist (BED) file (i.e., https://www.encodeproject.org/files/ENCFF419RSJ/)
+* Chrom Size file (i.e., https://github.com/gersteinlab/starrpeaker/blob/master/data/GRCh38.chrom.sizes.simple.sorted or https://hgdownload-test.gi.ucsc.edu/goldenPath/hg38/bigZips/hg38.chrom.sizes) 
+* Blacklist (BED) file (i.e., https://github.com/gersteinlab/starrpeaker/blob/master/data/ENCODE_blacklist_GRCh38_ENCFF419RSJ_merged.bed or https://www.encodeproject.org/files/ENCFF419RSJ/)
 
 ## Covariates
 The peak calling algorithm models STARR-seq fragment coverage across the genome using multiple covariates to correct for potential sequencing bias. It is recommended to include potential confounding variables into the model. These include but not limited to GC-content, mappability tracks, and so on.
