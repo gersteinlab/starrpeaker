@@ -1,6 +1,18 @@
 # STARRPeaker
 Uniform processing pipeline and peak caller for STARR-seq data
 
+## Changelog
+### v1.1
+- Updated the final peak call (BED6+) ENCODE specification (https://www.encodeproject.org/documents/9f5d2b5a-bd29-4983-9c01-fab4ab8b5ea2/)
+- In specific, fold change is changed to log2 fold change
+- In specific, input coverage is reported along with output coverage
+
+### v1.0
+- Updated documentation for ENCODE release (https://bit.ly/whg-starr-seq)
+
+### v1.0-rc
+- Release candidate with early version of documentation
+
 ## Dependencies (version tested)
 * Python 2.7 (v2.7.15)
 * pysam (v0.15.3)
@@ -120,7 +132,22 @@ starrpeaker --prefix <prefix for output files> --chromsize <hg38.chrom.sizes> --
 * *prefix*.peak.pval.bw: P-value track in bigWig format (-log10)
 * *prefix*.peak.qval.bw: Q-value track in bigWig format (-log10)
 
-## Final Peak Call Format (BED6+4)
+## Final Peak Call Format (v1.1 and above; BED6+5)
+* Column 1: Chromosome
+* Column 2: Start position
+* Column 3: End position
+* Column 4: Name (peak rank based on score, 1 being the highest rank)
+* Column 5: Score (integer value of "100 * fold change", maxed at 1000 per BED format specification)
+* Column 6: Strand
+* Column 7: Log2 Fold change (normalized output/input ratio, in log2 space)
+* Column 8: Input fragment coverage (total fragments across/within replicate(s))
+* Column 9: Output fragment coverage (total fragments across/within replicate(s))
+* Column 10: -log10 of P-value
+* Column 11: -log10 of Q-value (Benjamini-Hochberg False Discovery Rate, FDR)
+
+*ENCODE MPRA/STARR-seq BED6+5 common file format: https://www.encodeproject.org/documents/9f5d2b5a-bd29-4983-9c01-fab4ab8b5ea2/*
+
+## Final Peak Call Format (up to v1.0; BED6+4)
 * Column 1: Chromosome
 * Column 2: Start position
 * Column 3: End position

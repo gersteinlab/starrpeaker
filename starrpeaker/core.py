@@ -745,19 +745,23 @@ def call_peak(prefix, bedFile, bctFile, chromSize, bwFile, covFile=None, thresho
 
     ### merge peak
     print("[%s] Merge peaks" % (timestamp()))
-    pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 6, 7, 8], o=["max", "max", "max", "max"]).saveas(prefix + ".peak.centered.merged.bed")
+    # pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 6, 7, 8], o=["max", "max", "max", "max"]).saveas(prefix + ".peak.centered.merged.bed")
+    pybedtools.BedTool(prefix + ".peak.centered.bed").merge(c=[4, 5, 6, 7, 8], o=["max", "max", "max", "max", "max"]).saveas(prefix + ".peak.centered.merged.bed")
 
     ### finalize peak
     print("[%s] Finalize peaks" % (timestamp()))
     peak = pd.read_csv(prefix + ".peak.centered.merged.bed", sep='\t', header=None)
-    peak.columns = ['chr', 'start', 'end', 'fc', 'cov', 'nlog10pval', 'nlog10qval']
+    # peak.columns = ['chr', 'start', 'end', 'fc', 'cov', 'nlog10pval', 'nlog10qval']
+    peak.columns = ['chr', 'start', 'end', 'fc', 'icov', 'ocov', 'nlog10pval', 'nlog10qval']
+    peak['log2fc'] = np.log2(peak['fc'])
     peak['idx'] = peak.index
     peak['strand'] = "."
     peak['score'] = [min(int(round(x)), 1000) for x in peak['fc'] * 100]
     peak = peak.sort_values(by=['fc'], ascending=False)
     peak['name'] = ['peak_' + str(x) for x in peak.reset_index().index + 1]
     peak = peak.sort_values(by=['idx'])
-    final = peak[['chr', 'start', 'end', 'name', 'score', 'strand', 'fc', 'cov', 'nlog10pval', 'nlog10qval']]
+    # final = peak[['chr', 'start', 'end', 'name', 'score', 'strand', 'fc', 'cov', 'nlog10pval', 'nlog10qval']]
+    final = peak[['chr', 'start', 'end', 'name', 'score', 'strand', 'log2fc', 'icov', 'ocov', 'nlog10pval', 'nlog10qval']]
     final.to_csv(prefix + '.peak.final.bed', sep='\t', float_format='%.3f', index=False, header=False)
 
     ### remove intermediate peak files
