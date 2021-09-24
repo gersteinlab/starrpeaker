@@ -35,6 +35,7 @@ parser.add_argument('--mode', help='Mode', required=False, type=int, default=1)
 parser.add_argument('--mincov', help='Minimum Coverage', required=False, type=int, default=10)
 parser.add_argument('--eq', help='Extreme Quantile to Remove', required=False, type=float, default=1e-5)
 parser.add_argument('--se', help='Use Single-End instead of Paired-end Sequencing', required=False, action='store_true')
+parser.add_argument('--minfc', help='Minumum Fold Change', required=False, type=float, default=1.5)
 
 args = parser.parse_args()
 
@@ -75,7 +76,8 @@ def main():
                        threshold=args.threshold,
                        mode=args.mode,
                        minCoverage=args.mincov,
-                       extQuantile=args.eq)
+                       extQuantile=args.eq,
+                       minFC=args.minfc)
     else:
         core.call_peak(prefix=args.prefix,
                        chromSize=args.chromsize,
@@ -86,7 +88,8 @@ def main():
                        threshold=args.threshold,
                        mode=args.mode,
                        minCoverage=args.mincov,
-                       extQuantile=args.eq)
+                       extQuantile=args.eq,
+                       minFC=args.minfc)
 
 
 if __name__ == "__main__": main()

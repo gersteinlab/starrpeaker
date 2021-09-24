@@ -517,7 +517,7 @@ def theta(y, mu, verbose=False):
     return t0, se
 
 
-def call_peak(prefix, bedFile, bctFile, chromSize, bwFile, covFile=None, threshold=0.05, mode=1, minCoverage=10, extQuantile=1e-5):
+def call_peak(prefix, bedFile, bctFile, chromSize, bwFile, covFile=None, threshold=0.05, mode=1, minCoverage=10, extQuantile=1e-5, minFC=1.5):
     '''
 
     calls peak
@@ -599,7 +599,7 @@ def call_peak(prefix, bedFile, bctFile, chromSize, bwFile, covFile=None, thresho
 
     ### train / test genomic bin ###
     trainingBin = (bct_i > minInput) & (bct_i < maxInput) & (bct_o > minOutput) & (bct_o < maxOutput) & nonSliding
-    testingBin = (bct_i > minInput) & (bct_i < maxInput) & (fc > 1.5)  ### bins w/ FC > 1.5 are tested for statistical significance
+    testingBin = (bct_i > minInput) & (bct_i < maxInput) & (fc > minFC)  ### bins w/ FC > minFC are tested for statistical significance
 
     ### filtering bins
     print("[%s] Total genomic bins: %s" % (timestamp(), '{:,}'.format(mat.shape[0])))
