@@ -23,6 +23,8 @@ parser.add_argument('--blacklist', help='Blacklist Region in BED format', requir
 ### optional args
 parser.add_argument('--length', help='Bin Length', required=False, type=int, default=500)
 parser.add_argument('--step', help='Step Size', required=False, type=int, default=100)
+parser.add_argument('--capture', help='Capture Region in BED format', required=False)
+parser.add_argument('--slop', help='Extend Capture Region in each direction', type=int, required=False)
 
 args = parser.parse_args()
 
@@ -30,4 +32,6 @@ if __name__ == "__main__": core.make_bin(prefix=args.prefix,
                                          chromSize=args.chromsize,
                                          binLength=args.length,
                                          stepSize=args.step,
-                                         blackList=args.blacklist)
+                                         blackList=args.blacklist,
+                                         capture=args.capture,
+                                         slop=args.slop)

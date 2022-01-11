@@ -28,6 +28,7 @@ parser.add_argument('--threshold', help='Adjusted P-value Threshold', required=F
 parser.add_argument('--mode', help='Mode', required=False, type=int, default=1)
 parser.add_argument('--mincov', help='Minimum Coverage', required=False, type=int, default=10)
 parser.add_argument('--eq', help='Extreme Quantile to Remove', required=False, type=float, default=1e-5)
+parser.add_argument('--minfc', help='Minumum Fold Change', required=False, type=float, default=1.5)
 
 args = parser.parse_args()
 
@@ -40,4 +41,5 @@ if __name__ == "__main__": core.call_peak(prefix=args.prefix,
                                           threshold=args.threshold,
                                           mode=args.mode,
                                           minCoverage=args.mincov,
-                                          extQuantile=args.eq)
+                                          extQuantile=args.eq,
+                                          minFC=args.minfc)
