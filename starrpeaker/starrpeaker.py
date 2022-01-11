@@ -36,6 +36,8 @@ parser.add_argument('--mincov', help='Minimum Coverage', required=False, type=in
 parser.add_argument('--eq', help='Extreme Quantile to Remove', required=False, type=float, default=1e-5)
 parser.add_argument('--se', help='Use Single-End instead of Paired-end Sequencing', required=False, action='store_true')
 parser.add_argument('--minfc', help='Minumum Fold Change', required=False, type=float, default=1.5)
+parser.add_argument('--capture', help='Capture Region in BED format', required=False)
+parser.add_argument('--slop', help='Extend Capture Region in each direction', type=int, required=False)
 
 args = parser.parse_args()
 
@@ -46,7 +48,9 @@ def main():
                   chromSize=args.chromsize,
                   binLength=args.length,
                   stepSize=args.step,
-                  blackList=args.blacklist)
+                  blackList=args.blacklist,
+                  capture=args.capture,
+                  slop=args.slop)
 
     ### process covariates
     if args.cov:

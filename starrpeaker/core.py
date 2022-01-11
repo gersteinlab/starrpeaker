@@ -52,7 +52,7 @@ def get_uid():
     return str(uuid.uuid4())[:8]
 
 
-def make_bin(prefix, chromSize, binLength, stepSize, blackList):
+def make_bin(prefix, chromSize, binLength, stepSize, blackList, capture, slop):
     '''
     makes genomic bins in BED format
 
@@ -69,17 +69,28 @@ def make_bin(prefix, chromSize, binLength, stepSize, blackList):
     '''
     ### make sliding window
     print("[%s] Making bins" % (timestamp()))
-    bin = pybedtools.BedTool().window_maker(g=chromSize, w=binLength, s=stepSize)
+    out = pybedtools.BedTool().window_maker(g=chromSize, w=binLength, s=stepSize)
 
     ### filter blacklist region
     print("[%s] Filtering blacklist region" % (timestamp()))
     blk = pybedtools.BedTool(blackList).sort()
-    out = bin.intersect(blk, v=True, sorted=True)
+    out = out.intersect(blk, v=True, sorted=True)
+    del blk
+
+    ### filter capture region
+    if capture:
+        print("[%s] Filtering capture region" % (timestamp()))
+        cap = pybedtools.BedTool(capture).sort()
+        if slop:
+            print("[%s] Extending capture region" % (timestamp()))
+            cap = cap.slop(g=chromSize, b=slop) 
+        out = out.intersect(cap, u=True, sorted=True)
+        del cap
 
     ### write to file
     with open(prefix + ".bin.bed", 'w') as file:
         file.write(str(out))
-    del bin, blk, out
+    del out
     print("[%s] Done" % (timestamp()))
 
 
