@@ -2,6 +2,9 @@
 Uniform processing pipeline and peak caller for STARR-seq data
 
 ## Changelog
+### v1.2
+- Added a new functionality to restrict analysis to a supplied capture panel BED file (--capture)
+
 ### v1.1
 - Updated the final peak call (BED6+) ENCODE specification (https://www.encodeproject.org/documents/9f5d2b5a-bd29-4983-9c01-fab4ab8b5ea2/)
 - In specific, fold change is changed to log2 fold change
@@ -89,31 +92,38 @@ usage: starrpeaker.py [-h] --prefix PREFIX --chromsize CHROMSIZE --blacklist
                       [--step STEP] [--cov COV [COV ...]] [--min MIN]
                       [--max MAX] [--readstart] [--strand STRAND]
                       [--threshold THRESHOLD] [--mode MODE] [--mincov MINCOV]
-                      [--eq EQ] [--se]
+                      [--eq EQ] [--se] [--minfc MINFC] [--capture CAPTURE]
+                      [--slop SLOP]
 
 STARRPeaker
 
-required arguments:
-  --prefix PREFIX             Output File Prefix
-  --chromsize CHROMSIZE       Chrom Sizes
-  --blacklist BLACKLIST       Blacklist Region in BED format
-  -i INPUT, --input INPUT     Input BAM File
-  -o OUTPUT, --output OUTPUT  STARR-seq BAM File
-
 optional arguments:
-  -h, --help                  show this help message and exit
-  --length LENGTH             Bin Length (default: 500)
-  --step STEP                 Step Size (default: 100)
-  --cov COV [COV ...]         Covariate BigWig Files
-  --min MIN                   Minimum Template Size (default: 200)
-  --max MAX                   Maximum Template Size (default: 1000)
-  --readstart                 Use Read Start Position instead of Fragment Center
-  --strand STRAND             Use all/fwd/rev Stranded Fragments (default: all)
-  --threshold THRESHOLD       Adjusted P-value Threshold (default: 0.05)
-  --mode MODE                 Mode [1 - using input as covariate (default), 2 - using input as offset]
-  --mincov MINCOV             Minimum Coverage (default: 10)
-  --eq EQ                     Extreme Quantile to Remove (default: 1e-5)
-  --se                        Use Single-End instead of Paired-end Sequencing
+  -h, --help            show this help message and exit
+  --prefix PREFIX       Output File Prefix
+  --chromsize CHROMSIZE
+                        Chrom Sizes
+  --blacklist BLACKLIST
+                        Blacklist Region in BED format
+  -i INPUT, --input INPUT
+                        Input BAM File
+  -o OUTPUT, --output OUTPUT
+                        STARR-seq BAM File
+  --length LENGTH       Bin Length
+  --step STEP           Step Size
+  --cov COV [COV ...]   Covariate BigWig Files
+  --min MIN             Minimum Template Size
+  --max MAX             Maximum Template Size
+  --readstart           Use Read Start Position instead of Fragment Center
+  --strand STRAND       Use all/fwd/rev Stranded Fragments
+  --threshold THRESHOLD
+                        Adjusted P-value Threshold
+  --mode MODE           Mode
+  --mincov MINCOV       Minimum Coverage
+  --eq EQ               Extreme Quantile to Remove
+  --se                  Use Single-End instead of Paired-end Sequencing
+  --minfc MINFC         Minumum Fold Change
+  --capture CAPTURE     Capture Region in BED format
+  --slop SLOP           Extend Capture Region in each direction
 ```
 
 ## Example
