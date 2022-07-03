@@ -72,8 +72,13 @@ samtools view -F 3852 -f 2 -q 40
 ## Covariates
 The peak calling algorithm models STARR-seq fragment coverage across the genome using multiple covariates to correct for potential sequencing bias. It is recommended to include potential confounding variables into the model. These include but not limited to GC-content, mappability tracks, and so on.
 
-The following covariates have been precomputed for use with STARRPeaker:
-* [Download link to covariates](http://gofile.me/4kBY9/EKNVQrVHM)
+The following covariates have been pre-computed for use with STARRPeaker:
+* [GRCh38 GC content](https://drive.google.com/file/d/1ZSznITGkqPLXzqAKElnjUrmCAtSZo2Gk/view?usp=sharing)
+* [GRCh38 mappability](https://drive.google.com/file/d/1ZSM7V_jgf61QGMpBfK8udOOMjq1QlkQU/view?usp=sharing)
+* [GRCh38 RNA folding energy](https://drive.google.com/file/d/1ZSO6q_b3alp82uApyOMnewdxsFy7ph1y/view?usp=sharing)
+* [hg19 GC content](https://drive.google.com/file/d/1Zkc9cxIePtWsyaJ_JQzHpg6D0c7D_9jX/view?usp=sharing)
+* [hg19 mappability](https://drive.google.com/file/d/1ZTNPszH1s7p4-sagDVxHLuFXZBzBPDbd/view?usp=sharing)
+* [hg19 RNA folding energy](https://drive.google.com/file/d/1ZVwJeSKYQ12328AhrB7JieJV8QkvhQQt/view?usp=sharing)
 
 Sources:
 * GRCh38 genome: https://www.encodeproject.org/files/GRCh38_no_alt_analysis_set_GCA_000001405.15/
