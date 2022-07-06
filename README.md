@@ -73,12 +73,12 @@ samtools view -F 3852 -f 2 -q 40
 The peak calling algorithm models STARR-seq fragment coverage across the genome using multiple covariates to correct for potential sequencing bias. It is recommended to include potential confounding variables into the model. These include but not limited to GC-content, mappability tracks, and so on.
 
 The following covariates have been pre-computed for use with STARRPeaker:
-* [GRCh38 GC content](https://drive.google.com/file/d/1ZSznITGkqPLXzqAKElnjUrmCAtSZo2Gk/view?usp=sharing)
-* [GRCh38 mappability](https://drive.google.com/file/d/1ZSM7V_jgf61QGMpBfK8udOOMjq1QlkQU/view?usp=sharing)
-* [GRCh38 RNA folding energy](https://drive.google.com/file/d/1ZSO6q_b3alp82uApyOMnewdxsFy7ph1y/view?usp=sharing)
-* [hg19 GC content](https://drive.google.com/file/d/1Zkc9cxIePtWsyaJ_JQzHpg6D0c7D_9jX/view?usp=sharing)
-* [hg19 mappability](https://drive.google.com/file/d/1ZTNPszH1s7p4-sagDVxHLuFXZBzBPDbd/view?usp=sharing)
-* [hg19 RNA folding energy](https://drive.google.com/file/d/1ZVwJeSKYQ12328AhrB7JieJV8QkvhQQt/view?usp=sharing)
+* [GRCh38 GC content](https://drive.google.com/file/d/1ZSznITGkqPLXzqAKElnjUrmCAtSZo2Gk/view?usp=sharing) [(backup)](http://archive2.gersteinlab.org/proj/starrpeaker/STARRPeaker_cov_GRCh38_ucsc-gc-5bp.bw)
+* [GRCh38 mappability](https://drive.google.com/file/d/1ZSM7V_jgf61QGMpBfK8udOOMjq1QlkQU/view?usp=sharing) [(backup)](http://archive2.gersteinlab.org/proj/starrpeaker/STARRPeaker_cov_GRCh38_gem-mappability-100mer.bw)
+* [GRCh38 RNA folding energy](https://drive.google.com/file/d/1ZSO6q_b3alp82uApyOMnewdxsFy7ph1y/view?usp=sharing) [(backup)](http://archive2.gersteinlab.org/proj/starrpeaker/STARRPeaker_cov_GRCh38_linearfold-folding-energy-100bp.bw)
+* [hg19 GC content](https://drive.google.com/file/d/1Zkc9cxIePtWsyaJ_JQzHpg6D0c7D_9jX/view?usp=sharing) [(backup)](http://archive2.gersteinlab.org/proj/starrpeaker/STARRPeaker_cov_hg19_ucsc-gc-5bp.bw)
+* [hg19 mappability](https://drive.google.com/file/d/1ZTNPszH1s7p4-sagDVxHLuFXZBzBPDbd/view?usp=sharing) [(backup)](http://archive2.gersteinlab.org/proj/starrpeaker/STARRPeaker_cov_hg19_gem-mappability-100mer.bw)
+* [hg19 RNA folding energy](https://drive.google.com/file/d/1ZVwJeSKYQ12328AhrB7JieJV8QkvhQQt/view?usp=sharing) [(backup)](http://archive2.gersteinlab.org/proj/starrpeaker/STARRPeaker_cov_hg19_linearfold-folding-energy-100bp.bw)
 
 Sources:
 * GRCh38 genome: https://www.encodeproject.org/files/GRCh38_no_alt_analysis_set_GCA_000001405.15/
